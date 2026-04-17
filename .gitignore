@@ -1,0 +1,22 @@
+# Ignorar dependencias pesadas de NPM/PNPM
+node_modules/
+
+# Archivos compilados en dist
+# (Obsidian usa main.js, manifest.json en la raíz, pero en desarrollo el dist intermedio se ignora)
+dist/
+
+# Carpetas privadas de la bóveda de Obsidian
+.obsidian/
+.trash/
+
+# Carpetas ocultas del plugin (El Cementerio no debe subir a Git)
+.cada-letra-cementerio/
+
+# Archivos de Entorno y Llaves Secretas
+.env
+*.env
+.env.local
+
+# Basura de Sistema Operativo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,22 @@
+{
+  "name": "cada-letra-sync",
+  "version": "1.0.0",
+  "description": "EveryLetter - El Noveno Hermano del Aldraverse",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "y-indexeddb": "^9.0.12",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.23"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "esbuild": "^0.25.0",
+    "obsidian": "^1.7.2",
+    "typescript": "^5.7.3"
+  }
+}

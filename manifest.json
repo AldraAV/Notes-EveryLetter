@@ -1,0 +1,10 @@
+{
+  "id": "everyletter",
+  "name": "Cada Letra",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "El Noveno Hermano del Aldraverse. Vault unificado. Cero Fricción.",
+  "author": "AldraAV",
+  "authorUrl": "https://github.com/AldraAV",
+  "isDesktopOnly": false
+}
