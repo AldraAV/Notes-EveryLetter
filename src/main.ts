@@ -139,45 +139,66 @@ export default class EveryLetterPlugin extends Plugin {
         this.statusBarItem.style.borderRadius = "4px";
         this.statusBarItem.style.fontFamily = "'Space Grotesk', 'Syne', 'Inter', monospace";
         this.statusBarItem.style.transition = "background-color 0.3s ease, color 0.3s ease";
-        this.updateSyncStatus('☀ / 🍒 Iguanas ranas', '#FFB703', '#1A0400'); 
+        this.statusBarItem.style.cursor = 'pointer';
+
+        // En modo Manual, un clic en la barra sincroniza la nota activa
+        this.statusBarItem.addEventListener('click', () => {
+            this.syncCurrentNote();
+        });
+
+        this.refreshStatusBar(); 
 
         // ================================================================
-        // 2. DETECCIÓN DE CAMBIOS LOCALES EN EDITOR (Tecla por tecla)
+        // 2. DETECCIÓN DE CAMBIOS LOCALES EN EDITOR
         // ================================================================
+        // En modo Live_Deltas: editor-change con debounce envía al CRDT → red
+        // En modo Manual_Batch: NO enviamos cambios en vivo, solo con Push/Pull
         this.registerEvent(
             this.app.workspace.on('editor-change', (editor, info) => {
+                // Solo sincronizar en vivo si el modo lo permite
+                if (this.settings.syncMode !== 'Live_Deltas') return;
+
                 const path = info.file?.path;
                 if(!path) return;
                 if(path.startsWith('.cada-letra')) return;
-
-                // Si estamos escribiendo desde la red, NO re-enviar
                 if (this.writingFromRemote.has(path)) return;
                 
-                const currentText = editor.getValue();
-                this.crdtEngine.applyChanges(path, currentText);
+                // Debounce de 800ms: esperar a que el usuario pare de teclear
+                // Esto evita las "letras apelmazadas" por bombardeo de deltas
+                if (this.modifyDebouncers[path]) {
+                    clearTimeout(this.modifyDebouncers[path]);
+                }
 
-                this.updateSyncStatus('⚡ Aguanta un ratito más...', '#FF8C42', '#1A0400'); 
-                setTimeout(() => {
-                    this.updateSyncStatus('☀️ ¡Así está la calabaza!', '#FFBF00', '#1A0400'); 
+                this.modifyDebouncers[path] = setTimeout(() => {
+                    const currentText = editor.getValue();
+                    this.crdtEngine.applyChanges(path, currentText);
+                    
+                    this.updateSyncStatus('☀️ Sincronizado', '#FFBF00', '#1A0400'); 
                     setTimeout(() => {
                         this.updateSyncStatus('☀ / 🍒 Iguanas ranas', '#FFB703', '#1A0400'); 
-                    }, 3000);
-                }, 1000);
+                    }, 2000);
+                }, 800);
             })
         );
 
         // ================================================================
-        // 3. OJO DE SAURON — Escuchar la Bóveda Entera (con Anti-Eco)
+        // 3. OJO DE SAURON — Escuchar la Bóveda (archivos cerrados)
+        // Solo captura cambios en archivos que NO están abiertos en el editor
+        // (para evitar doble disparo con editor-change)
         // ================================================================
         this.registerEvent(
             this.app.vault.on('modify', (file) => {
                 if (file instanceof TFile && file.extension === 'md') {
                     if (file.path.startsWith('.cada-letra')) return;
-                    
-                    // SUPRESOR DE ECO: Si la red está escribiendo este archivo, ignorar
                     if (this.writingFromRemote.has(file.path)) return;
 
-                    // Debounce: esperar 400ms para que el archivo decante
+                    // Si el archivo está abierto en el editor, editor-change ya lo maneja
+                    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+                    if (activeView && activeView.file && activeView.file.path === file.path) return;
+
+                    // Solo en modo Live — en Manual no emitimos nada automáticamente
+                    if (this.settings.syncMode !== 'Live_Deltas') return;
+
                     if (this.modifyDebouncers[file.path]) {
                         clearTimeout(this.modifyDebouncers[file.path]);
                     }
@@ -186,7 +207,7 @@ export default class EveryLetterPlugin extends Plugin {
                         this.app.vault.read(file).then(content => {
                             this.crdtEngine.applyChanges(file.path, content);
                         });
-                    }, 400);
+                    }, 800);
                 }
             })
         );
@@ -227,11 +248,20 @@ export default class EveryLetterPlugin extends Plugin {
         // ================================================================
         this.addCommand({
             id: 'everyletter-force-sync',
-            name: 'Pulsar latido manual a la red',
+            name: 'Sincronizar nota actual manualmente',
             callback: () => {
-                new Notice("🍒 EveryLetter: Latido forzado disparado a Supabase.");
-                this.updateSyncStatus('📡 Conectando...', '#FF8C42', '#1A0400');
-                setTimeout(() => this.updateSyncStatus('☀ / 🍒 Iguanas ranas', '#FFB703', '#1A0400'), 2500);
+                this.syncCurrentNote();
+            }
+        });
+        
+        this.addCommand({
+            id: 'everyletter-toggle-mode',
+            name: 'Alternar modo: Vivo ↔ Manual',
+            callback: async () => {
+                this.settings.syncMode = this.settings.syncMode === 'Live_Deltas' ? 'Manual_Batch' : 'Live_Deltas';
+                await this.saveSettings();
+                this.refreshStatusBar();
+                new Notice(`🍒 Modo cambiado a: ${this.settings.syncMode === 'Live_Deltas' ? 'Vivo (Automático)' : 'Manual (Botón)'}`);
             }
         });
     }
@@ -252,5 +282,31 @@ export default class EveryLetterPlugin extends Plugin {
         this.statusBarItem.setText(` ${text} `);
         this.statusBarItem.style.backgroundColor = bgColor;
         this.statusBarItem.style.color = textColor;
+    }
+
+    // Refrescar la barra según el modo activo
+    refreshStatusBar() {
+        if (this.settings.syncMode === 'Live_Deltas') {
+            this.updateSyncStatus('☀ / 🍒 Iguanas ranas', '#FFB703', '#1A0400');
+        } else {
+            this.updateSyncStatus('📌 Clic para sincronizar', '#888', '#FFF');
+        }
+    }
+
+    // Sincronizar la nota abierta en el editor manualmente
+    async syncCurrentNote() {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view || !view.file) {
+            new Notice('🍒 No hay nota abierta para sincronizar.');
+            return;
+        }
+        const path = view.file.path;
+        const content = view.editor.getValue();
+        
+        this.updateSyncStatus('📡 Enviando...', '#FF8C42', '#1A0400');
+        this.crdtEngine.applyChanges(path, content);
+        
+        new Notice(`🍒 Nota '${view.file.name}' sincronizada.`);
+        setTimeout(() => this.refreshStatusBar(), 2000);
     }
 }

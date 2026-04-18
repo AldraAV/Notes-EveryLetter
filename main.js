@@ -28879,156 +28879,130 @@ var CentroMandoTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.style.fontFamily = "'Inter', 'Space Grotesk', sans-serif";
-    containerEl.style.maxWidth = "750px";
-    containerEl.style.margin = "0 auto";
-    const header = containerEl.createDiv({ cls: "everyletter-mando-header" });
-    header.style.display = "flex";
-    header.style.justifyContent = "space-between";
-    header.style.alignItems = "flex-end";
-    header.style.borderBottom = "1px solid rgba(255,183,3, 0.3)";
-    header.style.paddingBottom = "15px";
-    header.style.marginBottom = "30px";
-    const titleWrapper = header.createDiv();
-    titleWrapper.createEl("h1", {
-      text: "Cada Letra",
-      attr: { style: 'margin:0; font-family: "Space Grotesk"; font-weight: 700; color: #FFB703; font-size: 2.2em; letter-spacing: -0.5px;' }
+    containerEl.addClass("cada-letra-settings");
+    const header = containerEl.createDiv({ cls: "setting-item" });
+    header.style.flexDirection = "column";
+    header.style.alignItems = "flex-start";
+    header.style.borderBottom = "none";
+    header.style.paddingBottom = "0";
+    const titleRow = header.createDiv();
+    titleRow.style.display = "flex";
+    titleRow.style.justifyContent = "space-between";
+    titleRow.style.alignItems = "center";
+    titleRow.style.width = "100%";
+    titleRow.createEl("h1", { text: "\u{1F352} Cada Letra" });
+    const badge = titleRow.createEl("span", {
+      text: this.plugin.settings.userRole === "Dios" ? "\u2694 Or\xE1culo" : "\u{1F4E1} Sat\xE9lite"
     });
-    titleWrapper.createEl("span", {
-      text: "Centro de Mando \u2022 Parlamento",
-      attr: { style: "margin:0; font-weight: 300; color: #888; font-size: 1em; letter-spacing: 2px; text-transform: uppercase;" }
-    });
-    const statusBadge = header.createDiv();
-    statusBadge.innerText = `Rango Actual: [ ${this.plugin.settings.userRole} ]`;
-    statusBadge.style.color = this.plugin.settings.userRole === "Dios" ? "#FC3F1D" : "#FFB703";
-    statusBadge.style.fontWeight = "bold";
-    statusBadge.style.padding = "5px 12px";
-    statusBadge.style.border = "1px solid currentColor";
-    statusBadge.style.borderRadius = "20px";
-    statusBadge.style.fontSize = "0.85em";
-    const quote = containerEl.createEl("p", {
-      text: `"Qu\xE9date con las notas que te escrib\xED porque cada letra las sent\xED muy en mi coraz\xF3n :)"`
-    });
-    quote.style.fontStyle = "italic";
-    quote.style.color = "#FFB703";
-    quote.style.opacity = "0.7";
-    quote.style.marginBottom = "35px";
-    containerEl.createEl("h3", { text: "I. Identidad del Nodo (B\xE1sico)", attr: { style: "font-weight: 600" } });
-    new import_obsidian2.Setting(containerEl).setName("Nombre del Dispositivo").setDesc("Designa un nombre para reconocerte en la malla (Ej. Laptop Personal).").addText((text2) => text2.setPlaceholder("Ej. Obsidian-Main").setValue(this.plugin.settings.deviceName).onChange(async (value) => {
+    badge.style.fontSize = "0.75em";
+    badge.style.padding = "4px 12px";
+    badge.style.borderRadius = "20px";
+    badge.style.border = "1px solid var(--text-faint)";
+    badge.style.color = "var(--text-muted)";
+    header.createEl("p", {
+      text: '"Qu\xE9date con las notas que te escrib\xED porque cada letra las sent\xED muy en mi coraz\xF3n :)"',
+      cls: "setting-item-description"
+    }).style.fontStyle = "italic";
+    new import_obsidian2.Setting(containerEl).setName("Identidad del nodo").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Nombre del dispositivo").setDesc("C\xF3mo se identifica este nodo en la malla (ej. Laptop-AldraAV).").addText((text2) => text2.setPlaceholder("Ej. Laptop-Personal").setValue(this.plugin.settings.deviceName).onChange(async (value) => {
       this.plugin.settings.deviceName = value;
       await this.plugin.saveSettings();
-      this.plugin.crdtEngine.activateNexo(this.plugin.settings.vaultKey, this.plugin.settings.deviceName);
+    })).addButton((btn) => btn.setButtonText("Reconectar").setCta().onClick(() => {
+      this.plugin.crdtEngine.activateNexo(
+        this.plugin.settings.vaultKey,
+        this.plugin.settings.deviceName
+      );
+      new import_obsidian2.Notice("\u{1F352} Red reconectada con nueva identidad.");
     }));
-    new import_obsidian2.Setting(containerEl).setName("Contrase\xF1a de B\xF3veda (Vault Key)").setDesc("El servidor de Supabase usar\xE1 esta llave como n\xFAcleo interconector.").addText((text2) => text2.setPlaceholder("Ej. Lupe-1706v...").setValue(this.plugin.settings.vaultKey).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Clave de b\xF3veda").setDesc("Contrase\xF1a compartida que une a todos los dispositivos. Misma clave = misma red.").addText((text2) => text2.setPlaceholder("Ej. mi-clave-secreta").setValue(this.plugin.settings.vaultKey).onChange(async (value) => {
       this.plugin.settings.vaultKey = value;
       await this.plugin.saveSettings();
-      this.plugin.crdtEngine.activateNexo(this.plugin.settings.vaultKey, this.plugin.settings.deviceName);
     }));
-    const methodSection = containerEl.createDiv();
-    methodSection.style.marginTop = "40px";
-    methodSection.style.padding = "15px 0";
-    methodSection.style.borderTop = "1px dashed #333";
-    methodSection.style.borderBottom = "1px dashed #333";
-    methodSection.createEl("h3", { text: "II. Frecuencia de Latido", attr: { style: "margin-top:0; color: #FFB703; font-weight: 600" } });
-    new import_obsidian2.Setting(methodSection).setName("Modo de Transfusi\xF3n de Red").setDesc("Decide c\xF3mo recibe y env\xEDa letras CADA LETRA frente a la Nube Central.").addDropdown((drop) => drop.addOption("Live_Deltas", "Transfusi\xF3n en Vivo (Instant CRDT Deltas)").addOption("Manual_Batch", "Cruce Parlamentario (Pull/Push Requests)").setValue(this.plugin.settings.syncMode).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Frecuencia de latido").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Modo de sincronizaci\xF3n").setDesc("En Vivo: cada cambio se env\xEDa autom\xE1ticamente. Manual: t\xFA decides cu\xE1ndo sincronizar.").addDropdown((drop) => drop.addOption("Live_Deltas", "\u26A1 En Vivo (Autom\xE1tico)").addOption("Manual_Batch", "\u{1F4CC} Manual (Bot\xF3n)").setValue(this.plugin.settings.syncMode).onChange(async (value) => {
       this.plugin.settings.syncMode = value;
       await this.plugin.saveSettings();
+      this.plugin.refreshStatusBar();
     }));
-    const opsWrapper = containerEl.createDiv();
-    opsWrapper.style.marginTop = "40px";
-    opsWrapper.style.padding = "25px";
-    opsWrapper.style.backgroundColor = "rgba(255, 183, 3, 0.03)";
-    opsWrapper.style.borderRadius = "15px";
-    opsWrapper.style.border = "1px solid rgba(255, 183, 3, 0.1)";
-    opsWrapper.createEl("h3", { text: "III. Creadores y Herejes (Nube DB)", attr: { style: "margin-top:0; color: #FFB703" } });
-    const massPush = new import_obsidian2.Setting(opsWrapper).setName("Forjar un Nuevo N\xFAcleo Divino (Push B\xF3veda)").setDesc("Subir\xEDas TODO tu disco directo a Supabase. T\xFA te coronas el Maestro y tu Vault_Key dictar\xE1 la ley.");
-    massPush.addButton((btn) => btn.setButtonText("Upload Total (Crear Nube)").onClick(async () => {
-      const originalText = btn.buttonEl.innerText;
-      btn.setButtonText("Empujando al vac\xEDo...");
+    new import_obsidian2.Setting(containerEl).setName("Gesti\xF3n de b\xF3veda en la nube").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Subir b\xF3veda completa").setDesc("Empuja TODO el estado de tus notas a Supabase. Te corona como Or\xE1culo de esta clave.").addButton((btn) => btn.setButtonText("Push total").setWarning().onClick(async () => {
+      const original = btn.buttonEl.innerText;
+      btn.setButtonText("Subiendo...");
+      btn.setDisabled(true);
       try {
         await this.plugin.crdtEngine.pushVaultMassive(this.plugin.settings.vaultKey);
         this.plugin.settings.userRole = "Dios";
         await this.plugin.saveSettings();
-        statusBadge.innerText = `Rango Actual: [ Dios ]`;
-        statusBadge.style.color = "#FC3F1D";
-        btn.setButtonText("N\xFAcleo Cristalizado \u{1F352}");
-        setTimeout(() => btn.setButtonText(originalText), 4e3);
+        btn.setButtonText("\u2705 Cristalizado");
+        badge.textContent = "\u2694 Or\xE1culo";
+        new import_obsidian2.Notice("\u{1F352} B\xF3veda subida. Eres el Or\xE1culo.");
       } catch (e) {
-        btn.setButtonText("Fallo en DB");
-        setTimeout(() => btn.setButtonText(originalText), 4e3);
+        btn.setButtonText("Error");
+        new import_obsidian2.Notice("\u{1F9E8} Fallo al subir b\xF3veda. Revisa la consola.");
       }
+      btn.setDisabled(false);
+      setTimeout(() => btn.setButtonText(original), 4e3);
     }));
-    massPush.controlEl.querySelector("button").style.backgroundColor = "rgba(252, 63, 29, 0.2)";
-    massPush.controlEl.querySelector("button").style.color = "#FC3F1D";
-    massPush.controlEl.querySelector("button").style.borderColor = "#FC3F1D";
-    const massPull = new import_obsidian2.Setting(opsWrapper).setName("Unirse a una B\xF3veda (Descargar Historia)").setDesc("\xBFHas llegado de fuera? Vac\xEDa el StateVector \xEDntegro de Supabase a tu computadora y materializa los archivos f\xEDsicos.");
-    massPull.addButton((btn) => btn.setButtonText("Descargar Vena C\xF3smica").onClick(async () => {
-      const originalText = btn.buttonEl.innerText;
-      btn.setButtonText("Descargando Vector...");
+    new import_obsidian2.Setting(containerEl).setName("Descargar b\xF3veda remota").setDesc("Baja el estado completo desde Supabase y materializa las notas en tu disco.").addButton((btn) => btn.setButtonText("Pull total").onClick(async () => {
+      const original = btn.buttonEl.innerText;
+      btn.setButtonText("Descargando...");
+      btn.setDisabled(true);
       try {
         await this.plugin.crdtEngine.pullVaultMassive(this.plugin.settings.vaultKey);
         this.plugin.settings.userRole = "Actor_Critico";
         await this.plugin.saveSettings();
-        statusBadge.innerText = `Rango Actual: [ Sat\xE9lite ]`;
-        statusBadge.style.color = "#FFB703";
-        btn.setButtonText("B\xF3veda F\xEDsica Viva \u2600");
-        setTimeout(() => btn.setButtonText(originalText), 4e3);
+        btn.setButtonText("\u2705 Materializado");
+        badge.textContent = "\u{1F4E1} Sat\xE9lite";
+        new import_obsidian2.Notice("\u{1F352} B\xF3veda descargada y materializada.");
       } catch (e) {
-        btn.setButtonText("Sin Registros DB");
-        setTimeout(() => btn.setButtonText(originalText), 4e3);
+        btn.setButtonText("Sin datos");
+        new import_obsidian2.Notice("\u{1F9E8} No se encontr\xF3 b\xF3veda para esta clave.");
       }
+      btn.setDisabled(false);
+      setTimeout(() => btn.setButtonText(original), 4e3);
     }));
     if (this.plugin.settings.userRole === "Dios") {
-      const adminWrapper = containerEl.createDiv();
-      adminWrapper.style.marginTop = "40px";
-      adminWrapper.style.padding = "25px";
-      adminWrapper.style.borderRadius = "15px";
-      adminWrapper.style.border = "2px solid #FC3F1D";
-      adminWrapper.style.boxShadow = "0px 0px 15px rgba(252, 63, 29, 0.1)";
-      adminWrapper.createEl("h2", { text: "\u{1F3DB}\uFE0F El Parlamento Restringido", attr: { style: "margin-top:0; color: #FC3F1D; text-transform: uppercase; font-weight: 800; letter-spacing: 1px" } });
-      adminWrapper.createEl("p", { text: "Solo t\xFA como Or\xE1culo de esta Nube puedes ver e impartir justicia aqu\xED.", attr: { style: "color:#CCC; font-size:0.9em; margin-bottom: 25px" } });
-      new import_obsidian2.Setting(adminWrapper).setName("Bandeja de Pull Requests").setDesc("Sat\xE9lites (Invitados) no pueden sobreescribir tus versos vitales. Ellos dejan Lotes Pendientes aqu\xED.").addButton((btn) => btn.setButtonText("Revisar (0) Pendientes").setDisabled(true));
-      new import_obsidian2.Setting(adminWrapper).setName("Malla de Sangre").setDesc("Dispositivos conectados ahora y escuchando bajo esta clave. T\xFA tienes la suprema potestad de sus letras.").addButton((btn) => btn.setButtonText("Manejar Restricciones P2P (En Desarrollo)").setDisabled(true));
-      const mayaContainer = adminWrapper.createDiv();
-      mayaContainer.style.background = "#0a0000";
-      mayaContainer.style.border = "1px solid #330000";
-      mayaContainer.style.padding = "15px";
-      mayaContainer.style.marginTop = "15px";
-      mayaContainer.style.borderRadius = "8px";
-      mayaContainer.createEl("h4", { text: "Sat\xE9lites y Entidades In-Vivo", attr: { style: "color: #FC3F1D; margin-top:0" } });
-      const listNodesDOM = mayaContainer.createEl("ul");
-      listNodesDOM.style.listStyle = "none";
-      listNodesDOM.style.padding = "0";
+      new import_obsidian2.Setting(containerEl).setName("Parlamento del Or\xE1culo").setHeading();
+      containerEl.createEl("p", {
+        text: "Solo t\xFA como creador de esta b\xF3veda tienes acceso a estas opciones.",
+        cls: "setting-item-description"
+      });
+      new import_obsidian2.Setting(containerEl).setName("Malla de dispositivos").setDesc("Nodos conectados en tiempo real bajo tu clave.");
+      const nodesContainer = containerEl.createDiv();
+      nodesContainer.style.padding = "10px 0";
+      const nodesList = nodesContainer.createEl("div");
+      nodesList.style.color = "var(--text-muted)";
+      nodesList.textContent = "Esperando conexiones...";
       const engineProvider = this.plugin.crdtEngine.supabaseProvider;
       if (engineProvider) {
         engineProvider.onNodesUpdated = (nodos) => {
-          listNodesDOM.empty();
+          nodesList.empty();
+          if (nodos.length === 0) {
+            nodesList.textContent = "Sin dispositivos conectados.";
+            return;
+          }
           nodos.forEach((nodeLabel) => {
-            const li = listNodesDOM.createEl("li");
-            li.style.color = "#fff";
-            li.style.marginBottom = "5px";
-            li.innerHTML = `<span style="color:#0f0; margin-right:8px;">\u25CF</span> ${nodeLabel}`;
-            if (nodeLabel === this.plugin.settings.deviceName) li.innerHTML += " <i>(T\xFA)</i>";
+            const item = nodesList.createDiv();
+            item.style.padding = "4px 0";
+            const isMe = nodeLabel === this.plugin.settings.deviceName;
+            item.textContent = `\u25CF ${nodeLabel}${isMe ? " (T\xFA)" : ""}`;
+            item.style.color = isMe ? "var(--interactive-accent)" : "var(--text-normal)";
           });
         };
       }
-      new import_obsidian2.Setting(adminWrapper).setName("Sala del Cementerio").setDesc('Los archivos que otros celulares "destruyan", caer\xE1n f\xEDsicamente a la carpeta ignota (.cada-letra-cementerio) hasta que t\xFA votes su eliminaci\xF3n final.').addButton((btn) => btn.setButtonText("Purgar / Restaurar Muertos").setDisabled(true));
-      const destroySet = new import_obsidian2.Setting(adminWrapper).setName("Apagar el Sol (Destruir Nube P\xFAblica)").setDesc("Borrar\xE1 todo rastro de tu b\xF3veda en Supabase. El historial flotante desaparecer\xE1 para siempre de internet. Nadie podr\xE1 descargar tus notas.").addButton((btn) => btn.setButtonText("OBLITERAR N\xDACLEO NUBE").onClick(async () => {
-        btn.setButtonText("Vaciando el cielo...");
+      new import_obsidian2.Setting(containerEl).setName("Cementerio").setDesc("Archivos borrados remotamente se guardan en .cada-letra-cementerio en vez de destruirse.").addButton((btn) => btn.setButtonText("Ver carpeta").onClick(() => {
+        new import_obsidian2.Notice("\u{1F352} Busca la carpeta .cada-letra-cementerio en tu explorador de archivos.");
+      }));
+      new import_obsidian2.Setting(containerEl).setName("Destruir b\xF3veda de la nube").setDesc("Elimina permanentemente todos los datos de tu clave en Supabase. Irreversible.").addButton((btn) => btn.setButtonText("Obliterar").setWarning().onClick(async () => {
+        btn.setButtonText("Destruyendo...");
         try {
           await this.plugin.crdtEngine.obliterateVaultMassive(this.plugin.settings.vaultKey);
-          btn.setButtonText("Nube Aniquilada \u{1F480}");
+          btn.setButtonText("\u{1F480} Aniquilado");
+          new import_obsidian2.Notice("B\xF3veda eliminada de la nube permanentemente.");
         } catch (e) {
-          btn.setButtonText("Fallo en Destrucci\xF3n");
+          btn.setButtonText("Error");
         }
       }));
-      const dangerBtn = destroySet.controlEl.querySelector("button");
-      if (dangerBtn) {
-        dangerBtn.style.backgroundColor = "#FC3F1D";
-        dangerBtn.style.color = "#FFF";
-        dangerBtn.style.borderColor = "#110200";
-        dangerBtn.style.fontWeight = "bold";
-      }
     }
   }
 };
@@ -29131,23 +29105,30 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
     this.statusBarItem.style.borderRadius = "4px";
     this.statusBarItem.style.fontFamily = "'Space Grotesk', 'Syne', 'Inter', monospace";
     this.statusBarItem.style.transition = "background-color 0.3s ease, color 0.3s ease";
-    this.updateSyncStatus("\u2600 / \u{1F352} Iguanas ranas", "#FFB703", "#1A0400");
+    this.statusBarItem.style.cursor = "pointer";
+    this.statusBarItem.addEventListener("click", () => {
+      this.syncCurrentNote();
+    });
+    this.refreshStatusBar();
     this.registerEvent(
       this.app.workspace.on("editor-change", (editor, info) => {
         var _a;
+        if (this.settings.syncMode !== "Live_Deltas") return;
         const path = (_a = info.file) == null ? void 0 : _a.path;
         if (!path) return;
         if (path.startsWith(".cada-letra")) return;
         if (this.writingFromRemote.has(path)) return;
-        const currentText = editor.getValue();
-        this.crdtEngine.applyChanges(path, currentText);
-        this.updateSyncStatus("\u26A1 Aguanta un ratito m\xE1s...", "#FF8C42", "#1A0400");
-        setTimeout(() => {
-          this.updateSyncStatus("\u2600\uFE0F \xA1As\xED est\xE1 la calabaza!", "#FFBF00", "#1A0400");
+        if (this.modifyDebouncers[path]) {
+          clearTimeout(this.modifyDebouncers[path]);
+        }
+        this.modifyDebouncers[path] = setTimeout(() => {
+          const currentText = editor.getValue();
+          this.crdtEngine.applyChanges(path, currentText);
+          this.updateSyncStatus("\u2600\uFE0F Sincronizado", "#FFBF00", "#1A0400");
           setTimeout(() => {
             this.updateSyncStatus("\u2600 / \u{1F352} Iguanas ranas", "#FFB703", "#1A0400");
-          }, 3e3);
-        }, 1e3);
+          }, 2e3);
+        }, 800);
       })
     );
     this.registerEvent(
@@ -29155,6 +29136,9 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
         if (file instanceof import_obsidian3.TFile && file.extension === "md") {
           if (file.path.startsWith(".cada-letra")) return;
           if (this.writingFromRemote.has(file.path)) return;
+          const activeView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+          if (activeView && activeView.file && activeView.file.path === file.path) return;
+          if (this.settings.syncMode !== "Live_Deltas") return;
           if (this.modifyDebouncers[file.path]) {
             clearTimeout(this.modifyDebouncers[file.path]);
           }
@@ -29162,7 +29146,7 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
             this.app.vault.read(file).then((content) => {
               this.crdtEngine.applyChanges(file.path, content);
             });
-          }, 400);
+          }, 800);
         }
       })
     );
@@ -29195,11 +29179,19 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
     );
     this.addCommand({
       id: "everyletter-force-sync",
-      name: "Pulsar latido manual a la red",
+      name: "Sincronizar nota actual manualmente",
       callback: () => {
-        new import_obsidian3.Notice("\u{1F352} EveryLetter: Latido forzado disparado a Supabase.");
-        this.updateSyncStatus("\u{1F4E1} Conectando...", "#FF8C42", "#1A0400");
-        setTimeout(() => this.updateSyncStatus("\u2600 / \u{1F352} Iguanas ranas", "#FFB703", "#1A0400"), 2500);
+        this.syncCurrentNote();
+      }
+    });
+    this.addCommand({
+      id: "everyletter-toggle-mode",
+      name: "Alternar modo: Vivo \u2194 Manual",
+      callback: async () => {
+        this.settings.syncMode = this.settings.syncMode === "Live_Deltas" ? "Manual_Batch" : "Live_Deltas";
+        await this.saveSettings();
+        this.refreshStatusBar();
+        new import_obsidian3.Notice(`\u{1F352} Modo cambiado a: ${this.settings.syncMode === "Live_Deltas" ? "Vivo (Autom\xE1tico)" : "Manual (Bot\xF3n)"}`);
       }
     });
   }
@@ -29216,5 +29208,27 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
     this.statusBarItem.setText(` ${text2} `);
     this.statusBarItem.style.backgroundColor = bgColor;
     this.statusBarItem.style.color = textColor;
+  }
+  // Refrescar la barra según el modo activo
+  refreshStatusBar() {
+    if (this.settings.syncMode === "Live_Deltas") {
+      this.updateSyncStatus("\u2600 / \u{1F352} Iguanas ranas", "#FFB703", "#1A0400");
+    } else {
+      this.updateSyncStatus("\u{1F4CC} Clic para sincronizar", "#888", "#FFF");
+    }
+  }
+  // Sincronizar la nota abierta en el editor manualmente
+  async syncCurrentNote() {
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+    if (!view || !view.file) {
+      new import_obsidian3.Notice("\u{1F352} No hay nota abierta para sincronizar.");
+      return;
+    }
+    const path = view.file.path;
+    const content = view.editor.getValue();
+    this.updateSyncStatus("\u{1F4E1} Enviando...", "#FF8C42", "#1A0400");
+    this.crdtEngine.applyChanges(path, content);
+    new import_obsidian3.Notice(`\u{1F352} Nota '${view.file.name}' sincronizada.`);
+    setTimeout(() => this.refreshStatusBar(), 2e3);
   }
 };
