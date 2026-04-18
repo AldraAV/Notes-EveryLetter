@@ -28572,30 +28572,51 @@ var SUPABASE_URL = "https://kxgopjwyvoursvyscxtf.supabase.co";
 var SUPABASE_KEY = "sb_publishable_d2edNcYBBc6kMZkP1Lr2kA_Q5EAgUL6";
 
 // src/network/supabaseProvider.ts
-var obsidianFetchNative = async (url, options) => {
+var obsidianFetch = async (url, config) => {
+  var _a;
+  const urlString = url instanceof URL ? url.toString() : url;
+  const method = (config == null ? void 0 : config.method) || "GET";
+  const headers = Object.assign({}, config == null ? void 0 : config.headers);
+  const requestParams = {
+    url: urlString,
+    method,
+    body: config == null ? void 0 : config.body,
+    headers,
+    throw: false
+    // No destruir todo por un 404 o 409
+  };
+  let response = void 0;
   try {
-    const reqOpts = {
-      url: url.toString(),
-      method: (options == null ? void 0 : options.method) || "GET",
-      headers: options == null ? void 0 : options.headers,
-      body: options == null ? void 0 : options.body,
-      throw: false
-      // No destruir todo por un 404
-    };
-    const res = await (0, import_obsidian.requestUrl)(reqOpts);
-    return {
-      ok: res.status >= 200 && res.status < 300,
-      status: res.status,
-      statusText: "",
-      url: url.toString(),
-      json: async () => res.json,
-      text: async () => res.text,
-      blob: async () => new Blob([res.arrayBuffer]),
-      headers: new Headers(res.headers)
-    };
-  } catch (err) {
-    throw err;
+    response = await (0, import_obsidian.requestUrl)(requestParams);
+  } catch (error) {
+    if ((_a = error == null ? void 0 : error.message) == null ? void 0 : _a.includes("net::ERR_FAILED")) {
+      return new Response(JSON.stringify({ error: "Network request failed" }), {
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: new Headers({ "content-type": "application/json" })
+      });
+    }
+    throw error;
   }
+  if (!response.arrayBuffer.byteLength) {
+    return new Response(null, {
+      status: response.status,
+      statusText: response.status.toString(),
+      headers: new Headers(response.headers)
+    });
+  }
+  const fetchResponse = new Response(response.arrayBuffer, {
+    status: response.status,
+    statusText: response.status.toString(),
+    headers: new Headers(response.headers)
+  });
+  const json = async () => {
+    return JSON.parse(response.text);
+  };
+  Object.defineProperty(fetchResponse, "json", {
+    value: json
+  });
+  return fetchResponse;
 };
 var CadaLetraSupabaseProvider = class {
   constructor(yDoc, vaultKey, deviceName) {
@@ -28604,14 +28625,9 @@ var CadaLetraSupabaseProvider = class {
     this.deviceName = deviceName;
     // Callback para que la Malla visual del oráculo reaccione en pantalla 
     this.onNodesUpdated = null;
-    const clientConfig = {};
-    if (import_obsidian.Platform.isMobile) {
-      console.log("\u{1F4F1} Plataforma M\xF3vil detectada: Activando Bypass CORS.");
-      clientConfig.global = { fetch: obsidianFetchNative };
-    } else {
-      console.log("\u{1F4BB} Plataforma PC detectada: Usando arteria directa de Electron.");
-    }
-    this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, clientConfig);
+    this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+      global: { fetch: obsidianFetch }
+    });
     console.log(`\u{1F525} Enlace Supabase preparado. B\xF3veda Candado [${vaultKey}]`);
     const channelId = `everyletter-sync-${vaultKey}`;
     this.channel = this.supabase.channel(channelId, {
@@ -28642,7 +28658,7 @@ var CadaLetraSupabaseProvider = class {
         try {
           applyUpdate(this.yDoc, updateBinary, originNode);
         } catch (e) {
-          console.error("\u{1F9E8} Fallo al aplicar Delta Externo (Requiere Quir\xF3fano severo):", e);
+          console.error("\u{1F9E8} Fallo al aplicar Delta Externo:", e);
         }
       }
     ).on(
@@ -28675,7 +28691,7 @@ var CadaLetraSupabaseProvider = class {
       }
     });
   }
-  // --- OPERACIONES MAESTRAS DE NÚCLEO (BÓVEDA ENTARA) ---
+  // --- OPERACIONES MAESTRAS DE NÚCLEO (BÓVEDA ENTERA) ---
   async pushVault(vaultKey, stateArray) {
     console.log(`\u2601\uFE0F Intentando cristalizar toda la b\xF3veda [${vaultKey}] en Supabase DB...`);
     const base64Data = Buffer.from(stateArray).toString("base64");
@@ -28688,6 +28704,7 @@ var CadaLetraSupabaseProvider = class {
       console.error("\u{1F9E8} Fallo card\xEDaco al subir b\xF3veda:", error);
       throw error;
     }
+    console.log(`\u2705 B\xF3veda [${vaultKey}] cristalizada exitosamente.`);
   }
   async pullVault(vaultKey) {
     console.log(`\u2601\uFE0F Localizando N\xFAcleo Maestro [${vaultKey}] en el espacio sideral...`);
@@ -28975,14 +28992,18 @@ var DEFAULT_SETTINGS = {
   deviceName: "",
   vaultKey: "",
   userRole: "Dios",
-  // Tú empiezas asumiendo ser Dios local hasta pactar
   syncMode: "Live_Deltas"
 };
 var EveryLetterPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
-    this.syncTimeout = null;
-    // Anclaje de sedantes para evitar lecturas vírgenes
+    // FASE 2 FRANKENSTEIN — Supresor de Eco Anti-Loop
+    // Cuando la red escribe un archivo local, Obsidian dispara 'modify'.
+    // Sin este Set, nuestro motor re-absorbería ese cambio y lo re-transmitiría
+    // creando un loop infinito de deltas fantasma (eco de escritura).
+    // Relay resuelve esto comparando contenido; nosotros bloqueamos por bandera temporal.
+    this.writingFromRemote = /* @__PURE__ */ new Set();
+    // Debounce para evitar lecturas vírgenes
     this.modifyDebouncers = {};
   }
   async onload() {
@@ -28992,6 +29013,7 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
     this.crdtEngine = new CRDTEngine();
     this.crdtEngine.activateNexo(this.settings.vaultKey, this.settings.deviceName);
     this.crdtEngine.onRemoteUpdate = async (path, fusedText, originNode) => {
+      this.writingFromRemote.add(path);
       const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
       if (view && view.file && view.file.path === path) {
         const currentCursor = view.editor.getCursor();
@@ -29025,6 +29047,9 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
           }
         }
       }
+      setTimeout(() => {
+        this.writingFromRemote.delete(path);
+      }, 600);
     };
     this.crdtEngine.onRemoteDelete = async (path, originNode) => {
       const exactFile = this.app.vault.getAbstractFileByPath(path);
@@ -29062,11 +29087,12 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
         var _a;
         const path = (_a = info.file) == null ? void 0 : _a.path;
         if (!path) return;
-        console.log(`[Cada Letra] Cambio detectado en: ${path}`);
+        if (path.startsWith(".cada-letra")) return;
+        if (this.writingFromRemote.has(path)) return;
         const currentText = editor.getValue();
         this.crdtEngine.applyChanges(path, currentText);
         this.updateSyncStatus("\u26A1 Aguanta un ratito m\xE1s...", "#FF8C42", "#1A0400");
-        this.syncTimeout = setTimeout(() => {
+        setTimeout(() => {
           this.updateSyncStatus("\u2600\uFE0F \xA1As\xED est\xE1 la calabaza!", "#FFBF00", "#1A0400");
           setTimeout(() => {
             this.updateSyncStatus("\u2600 / \u{1F352} Iguanas ranas", "#FFB703", "#1A0400");
@@ -29078,6 +29104,7 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
       this.app.vault.on("modify", (file) => {
         if (file instanceof import_obsidian3.TFile && file.extension === "md") {
           if (file.path.startsWith(".cada-letra")) return;
+          if (this.writingFromRemote.has(file.path)) return;
           if (this.modifyDebouncers[file.path]) {
             clearTimeout(this.modifyDebouncers[file.path]);
           }
@@ -29092,19 +29119,24 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
     this.registerEvent(
       this.app.vault.on("create", async (file) => {
         if (file instanceof import_obsidian3.TFile && file.extension === "md") {
-          const content = await this.app.vault.read(file);
-          this.crdtEngine.applyChanges(file.path, content);
+          if (file.path.startsWith(".cada-letra")) return;
+          setTimeout(async () => {
+            const content = await this.app.vault.read(file);
+            this.crdtEngine.applyChanges(file.path, content);
+          }, 300);
         }
       })
     );
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
+        if (file.path.startsWith(".cada-letra")) return;
         this.crdtEngine.deleteFile(file.path);
       })
     );
     this.registerEvent(
       this.app.vault.on("rename", async (file, oldPath) => {
         if (file instanceof import_obsidian3.TFile && file.extension === "md") {
+          if (file.path.startsWith(".cada-letra")) return;
           this.crdtEngine.deleteFile(oldPath);
           const content = await this.app.vault.read(file);
           this.crdtEngine.applyChanges(file.path, content);
@@ -29130,7 +29162,6 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
   async onunload() {
     console.log("\u{1F319} Cada Letra: Nodo desconectado.");
   }
-  // Helper centralizado para estética Lava/Neón Ambar
   updateSyncStatus(text2, bgColor, textColor) {
     this.statusBarItem.setText(` ${text2} `);
     this.statusBarItem.style.backgroundColor = bgColor;

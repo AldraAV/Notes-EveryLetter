@@ -1,36 +1,81 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Y from 'yjs';
-import { requestUrl, RequestUrlParam, Platform } from 'obsidian';
+import { requestUrl, Platform } from 'obsidian';
+import type { RequestUrlParam, RequestUrlResponse } from 'obsidian';
 import { SUPABASE_URL, SUPABASE_KEY } from '../env';
 
-// BYPASS MÓVIL CAPACITOR (Operación Frankenstein)
-// Extirpamos el fetch() de JS estándar que genera C.O.R.S. en el celular
-// y lo suplantamos con la aguja nativa de Obsidian
-const obsidianFetchNative = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+// ============================================================================
+// OPERACIÓN FRANKENSTEIN V2 — customFetch inspirado en Relay/customFetch.ts
+// https://github.com/No-Instructions/Relay/blob/main/src/customFetch.ts
+//
+// Relay demostró que usar requestUrl UNIVERSALMENTE (no solo en Mobile)
+// es la única forma confiable de evadir tanto CORS en Capacitor
+// como el bug de Electron #42419 en Desktop.
+// ============================================================================
+
+const obsidianFetch = async (
+    url: RequestInfo | URL,
+    config?: RequestInit,
+): Promise<Response> => {
+    const urlString = url instanceof URL ? url.toString() : (url as string);
+    const method = config?.method || 'GET';
+
+    const headers = Object.assign({}, config?.headers) as Record<string, string>;
+
+    const requestParams: RequestUrlParam = {
+        url: urlString,
+        method: method,
+        body: config?.body as string | ArrayBuffer,
+        headers: headers,
+        throw: false, // No destruir todo por un 404 o 409
+    };
+
+    let response: RequestUrlResponse | undefined = undefined;
     try {
-        const reqOpts: RequestUrlParam = {
-            url: url.toString(),
-            method: options?.method || 'GET',
-            headers: options?.headers as Record<string, string>,
-            body: options?.body as string | ArrayBuffer,
-            throw: false // No destruir todo por un 404
-        };
-        const res = await requestUrl(reqOpts);
-        
-        return {
-            ok: res.status >= 200 && res.status < 300,
-            status: res.status,
-            statusText: '',
-            url: url.toString(),
-            json: async () => res.json,
-            text: async () => res.text,
-            blob: async () => new Blob([res.arrayBuffer]),
-            headers: new Headers(res.headers as unknown as Record<string, string>)
-        } as unknown as Response;
-    } catch (err: any) {
-        throw err;
+        response = await requestUrl(requestParams);
+    } catch (error: any) {
+        // Relay maneja errores de Electron con gracia en vez de explotar
+        if (error?.message?.includes('net::ERR_FAILED')) {
+            return new Response(JSON.stringify({ error: 'Network request failed' }), {
+                status: 503,
+                statusText: 'Service Unavailable',
+                headers: new Headers({ 'content-type': 'application/json' }),
+            });
+        }
+        throw error;
     }
+
+    // Caso: respuesta vacía (DELETE exitoso, etc.)
+    if (!response.arrayBuffer.byteLength) {
+        return new Response(null, {
+            status: response.status,
+            statusText: response.status.toString(),
+            headers: new Headers(response.headers),
+        });
+    }
+
+    // Construir un Response REAL (no un objeto plano fake)
+    // Relay demostró que Supabase necesita un Response nativo verdadero
+    const fetchResponse = new Response(response.arrayBuffer, {
+        status: response.status,
+        statusText: response.status.toString(),
+        headers: new Headers(response.headers),
+    });
+
+    // Override del método json() para que Supabase lo parsee correctamente
+    const json = async () => {
+        return JSON.parse(response!.text);
+    };
+    Object.defineProperty(fetchResponse, 'json', {
+        value: json,
+    });
+
+    return fetchResponse;
 };
+
+// ============================================================================
+// PROVEEDOR DE RED SUPABASE — Cada Letra
+// ============================================================================
 
 export class CadaLetraSupabaseProvider {
     private supabase: SupabaseClient;
@@ -40,22 +85,16 @@ export class CadaLetraSupabaseProvider {
     public onNodesUpdated: ((nodesList: string[]) => void) | null = null;
 
     constructor(private yDoc: Y.Doc, public vaultKey: string, public deviceName: string) {
-        // Inyección del injerto Frankenstein Native-Fetch SÓLO PARA CELULARES
-        // Desktop Electron ya tiene red libre en Fetch y el proxy artificial lo satura y lo colapsa.
-        const clientConfig: Record<string, any> = {};
-        if (Platform.isMobile) {
-            console.log("📱 Plataforma Móvil detectada: Activando Bypass CORS.");
-            clientConfig.global = { fetch: obsidianFetchNative as any };
-        } else {
-            console.log("💻 Plataforma PC detectada: Usando arteria directa de Electron.");
-        }
-        
-        this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, clientConfig);
+        // Inyección UNIVERSAL del Fetch nativo de Obsidian (Desktop + Mobile)
+        // Relay demostró que Electron también tiene bugs de red. 
+        // No condicionar a Platform.isMobile.
+        this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+            global: { fetch: obsidianFetch as any }
+        });
         
         console.log(`🔥 Enlace Supabase preparado. Bóveda Candado [${vaultKey}]`);
 
         // Generamos el nombre del Canal basándonos en tu llave estricta
-        // Esto crea un candado en la sala secreta de Realtime
         const channelId = `everyletter-sync-${vaultKey}`;
         
         this.channel = this.supabase.channel(channelId, {
@@ -84,18 +123,16 @@ export class CadaLetraSupabaseProvider {
                     const originNode = payload.payload?.origin || 'Nodo_Desconocido';
                     
                     if (!deltaData) return;
-                    if (originNode === this.deviceName) return; // Ignorar si es un eco fantasma de nosotros mismos
+                    if (originNode === this.deviceName) return;
                     
                     console.log(`📲 [Red] Delta Externo de [${originNode}], Fusionando...`);
                     
-                    // La red JSON solo entiende arrays puros, aquí reconvertimos a Binario Inmutable
                     const updateBinary = Uint8Array.from(deltaData);
                     
-                    // Inyectamos el delta etiquetando el origen real en la 'transaction' de Yjs
                     try {
                         Y.applyUpdate(this.yDoc, updateBinary, originNode);
                     } catch(e) {
-                         console.error("🧨 Fallo al aplicar Delta Externo (Requiere Quirófano severo):", e);
+                         console.error("🧨 Fallo al aplicar Delta Externo:", e);
                     }
                 }
             )
@@ -132,7 +169,7 @@ export class CadaLetraSupabaseProvider {
         });
     }
 
-    // --- OPERACIONES MAESTRAS DE NÚCLEO (BÓVEDA ENTARA) ---
+    // --- OPERACIONES MAESTRAS DE NÚCLEO (BÓVEDA ENTERA) ---
 
     public async pushVault(vaultKey: string, stateArray: Uint8Array): Promise<void> {
         console.log(`☁️ Intentando cristalizar toda la bóveda [${vaultKey}] en Supabase DB...`);
@@ -151,6 +188,7 @@ export class CadaLetraSupabaseProvider {
             console.error("🧨 Fallo cardíaco al subir bóveda:", error);
             throw error;
         }
+        console.log(`✅ Bóveda [${vaultKey}] cristalizada exitosamente.`);
     }
 
     public async pullVault(vaultKey: string): Promise<Uint8Array | null> {
@@ -166,7 +204,6 @@ export class CadaLetraSupabaseProvider {
             return null;
         }
         
-        // Decodificamos de vuelta a Matemáticas puras
         const restoredBuffer = Buffer.from(data.state_vector, 'base64');
         return new Uint8Array(restoredBuffer);
     }

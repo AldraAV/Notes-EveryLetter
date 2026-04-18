@@ -13,38 +13,46 @@ interface EveryLetterSettings {
 const DEFAULT_SETTINGS: EveryLetterSettings = {
     deviceName: '',
     vaultKey: '',
-    userRole: 'Dios', // Tú empiezas asumiendo ser Dios local hasta pactar
+    userRole: 'Dios',
     syncMode: 'Live_Deltas'
 }
 
 export default class EveryLetterPlugin extends Plugin {
-    // Memoria nativa para la configuración (Device_Name y Key Dinámicos)
     settings: EveryLetterSettings;
-    // El Sol de Cada Letra - Aurora Visual Ámbar Sunlight
     private statusBarItem: HTMLElement;
-    private syncTimeout: NodeJS.Timeout | null = null;
-    private crdtEngine: CRDTEngine;
-    // Anclaje de sedantes para evitar lecturas vírgenes
+    crdtEngine: CRDTEngine;
+
+    // FASE 2 FRANKENSTEIN — Supresor de Eco Anti-Loop
+    // Cuando la red escribe un archivo local, Obsidian dispara 'modify'.
+    // Sin este Set, nuestro motor re-absorbería ese cambio y lo re-transmitiría
+    // creando un loop infinito de deltas fantasma (eco de escritura).
+    // Relay resuelve esto comparando contenido; nosotros bloqueamos por bandera temporal.
+    private writingFromRemote: Set<string> = new Set();
+
+    // Debounce para evitar lecturas vírgenes
     private modifyDebouncers: Record<string, ReturnType<typeof setTimeout>> = {};
 
     async onload() {
-        // Absorber la configuración local (Las credenciales si ya estaban)
         await this.loadSettings();
 
         console.log(`☀️ Despertando el Noveno Hermano: Cada Letra (Nodo: ${this.settings.deviceName || 'Misterio'})`);
         
-        // Inyectamos el Dashboard Premium en el centro del sistema
+        // Dashboard Premium
         this.addSettingTab(new CentroMandoTab(this.app, this));
 
-        // Carga de la mente abstracta de sincronización
+        // Motor CRDT
         this.crdtEngine = new CRDTEngine();
-        // Le inyectamos los settings dinámicos que guardaste (o los defaults)
         this.crdtEngine.activateNexo(this.settings.vaultKey, this.settings.deviceName);
 
-        // 0. FASE PRO: Inyección Visual y Recepción de Deltas Externos
+        // ================================================================
+        // 0. RECEPCIÓN DE DELTAS REMOTOS → ESCRITURA LOCAL
+        // ================================================================
         this.crdtEngine.onRemoteUpdate = async (path, fusedText, originNode) => {
+            // Marcar el archivo como "siendo escrito por la red"
+            // para que el listener de 'modify' lo ignore y no genere eco
+            this.writingFromRemote.add(path);
+
             const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-            // Si el archivo que vemos es exactamente el que llegó modificado desde la red
             if (view && view.file && view.file.path === path) {
                 const currentCursor = view.editor.getCursor(); 
                 view.editor.setValue(fusedText);
@@ -54,16 +62,14 @@ export default class EveryLetterPlugin extends Plugin {
                 setTimeout(() => this.updateSyncStatus('☀ / 🍒 Iguanas ranas', '#FFB703', '#1A0400'), 3000);
             } else {
                 // MATERIALIZACIÓN FÍSICA ASÍNCRONA
-                // Si el archivo NO está abierto, o si acabamos de hacer un súper "Pull de Bóveda",
-                // Obligamos al Disco Duro a reconocer la orden divina y escribir la nota
                 const exactFile = this.app.vault.getAbstractFileByPath(path);
                 
                 if (exactFile instanceof TFile) {
                     await this.app.vault.modify(exactFile, fusedText);
                     console.log(`[Materializador]: El nodo [${originNode}] alteró '${path}' en segundo plano.`);
                 } else if (!exactFile) {
-                    // Si el archivo es virgen y viene de la nube, lo forjamos de la nada
                     try {
+                        // Forjar carpetas intermedias recursivamente
                         const folders = path.split('/');
                         if (folders.length > 1) {
                             let currentFolder = '';
@@ -83,15 +89,20 @@ export default class EveryLetterPlugin extends Plugin {
                     }
                 }
             }
+
+            // Limpiar la bandera de eco después de que Obsidian procese el evento
+            setTimeout(() => {
+                this.writingFromRemote.delete(path);
+            }, 600);
         };
 
-        // 0.5. FUNDACIÓN DEL CEMENTERIO (El "No-Olvido")
+        // ================================================================
+        // 0.5. CEMENTERIO (El "No-Olvido")
+        // ================================================================
         this.crdtEngine.onRemoteDelete = async (path, originNode) => {
             const exactFile = this.app.vault.getAbstractFileByPath(path);
             if (exactFile instanceof TFile) {
                 if (this.settings.userRole === 'Dios') {
-                    // Somos Dios. Nos negamos a borrarlo per sé.
-                    // Renombramos la carpeta base hacia el cementerio ignoto.
                     const cementerioPath = '.cada-letra-cementerio';
                     const cementerioFolder = this.app.vault.getAbstractFileByPath(cementerioPath);
                     if (!cementerioFolder) {
@@ -99,7 +110,6 @@ export default class EveryLetterPlugin extends Plugin {
                     }
                     
                     const fileName = exactFile.name;
-                    // Limpiamos los dos puntos y agregamos un registro imborrable de timestamp
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                     const newPath = `${cementerioPath}/${timestamp}-${fileName}`;
                     
@@ -107,50 +117,41 @@ export default class EveryLetterPlugin extends Plugin {
                     this.updateSyncStatus(`💀 Salvado en Cementerio: [${originNode}] borró ${fileName}`, '#FC3F1D', '#1A0400');
                     console.log(`[Cementerio]: Negamos la muerte de ${path}. Renacido en ${newPath}.`);
                 } else {
-                    // Si somos un humilde satélite obedecemos el borrado asqueroso del administrador
                     await this.app.vault.trash(exactFile, true); 
                     this.updateSyncStatus(`💀 [${originNode}] purgó ${exactFile.name} de la bóveda`, '#FC3F1D', '#1A0400');
                 }
             }
         };
 
-        // 1. Añadir indicador a la barra de estado inferior
+        // ================================================================
+        // 1. BARRA DE ESTADO ESTÉTICA
+        // ================================================================
         this.statusBarItem = this.addStatusBarItem();
-        
-        // Setup Estética Core
         this.statusBarItem.style.fontWeight = "bold";
         this.statusBarItem.style.padding = "2px 8px";
         this.statusBarItem.style.borderRadius = "4px";
         this.statusBarItem.style.fontFamily = "'Space Grotesk', 'Syne', 'Inter', monospace";
         this.statusBarItem.style.transition = "background-color 0.3s ease, color 0.3s ease";
-        
-        // Estado base: sin cambios pendientes
         this.updateSyncStatus('☀ / 🍒 Iguanas ranas', '#FFB703', '#1A0400'); 
 
-        // 2. Interceptar cuando modificas una nota (CRDT Deltas pronto aquí)
+        // ================================================================
+        // 2. DETECCIÓN DE CAMBIOS LOCALES EN EDITOR (Tecla por tecla)
+        // ================================================================
         this.registerEvent(
             this.app.workspace.on('editor-change', (editor, info) => {
                 const path = info.file?.path;
                 if(!path) return;
+                if(path.startsWith('.cada-letra')) return;
+
+                // Si estamos escribiendo desde la red, NO re-enviar
+                if (this.writingFromRemote.has(path)) return;
                 
-                // "Cada letra las sentí..."
-                console.log(`[Cada Letra] Cambio detectado en: ${path}`);
-                
-                // Obtenemos todo el texto actual del editor
                 const currentText = editor.getValue();
-                
-                // Enchufamos la Ruta y el texto crudo al Quirófano Yjs
                 this.crdtEngine.applyChanges(path, currentText);
 
-                // Estado de sincronización en progreso: Naranja Fuerte
                 this.updateSyncStatus('⚡ Aguanta un ratito más...', '#FF8C42', '#1A0400'); 
-                
-                // TODO: Envío CRDT a Supabase. Simulación de éxito por ahora:
-                this.syncTimeout = setTimeout(() => {
-                    // Sincronización exitosa: Amarillo Cálido
+                setTimeout(() => {
                     this.updateSyncStatus('☀️ ¡Así está la calabaza!', '#FFBF00', '#1A0400'); 
-                    
-                    // Volver al reposo
                     setTimeout(() => {
                         this.updateSyncStatus('☀ / 🍒 Iguanas ranas', '#FFB703', '#1A0400'); 
                     }, 3000);
@@ -158,18 +159,22 @@ export default class EveryLetterPlugin extends Plugin {
             })
         );
 
-        // 3. FASE MASIVA: El Ojo de Sauron (Escuchar la Bóveda Entera, no sólo los dedos)
+        // ================================================================
+        // 3. OJO DE SAURON — Escuchar la Bóveda Entera (con Anti-Eco)
+        // ================================================================
         this.registerEvent(
             this.app.vault.on('modify', (file) => {
                 if (file instanceof TFile && file.extension === 'md') {
                     if (file.path.startsWith('.cada-letra')) return;
                     
-                    // Sedante a la hiperactividad de Obsidian (Debounce)
+                    // SUPRESOR DE ECO: Si la red está escribiendo este archivo, ignorar
+                    if (this.writingFromRemote.has(file.path)) return;
+
+                    // Debounce: esperar 400ms para que el archivo decante
                     if (this.modifyDebouncers[file.path]) {
                         clearTimeout(this.modifyDebouncers[file.path]);
                     }
                     
-                    // Esperamos 400ms tras el último espasmo del archivo para que decante el contenido
                     this.modifyDebouncers[file.path] = setTimeout(() => {
                         this.app.vault.read(file).then(content => {
                             this.crdtEngine.applyChanges(file.path, content);
@@ -178,25 +183,31 @@ export default class EveryLetterPlugin extends Plugin {
                 }
             })
         );
+
         this.registerEvent(
             this.app.vault.on('create', async (file) => {
-                // Cuando nace una nueva nota, vacía o llena, avisamos al Y.Map
                 if(file instanceof TFile && file.extension === 'md') {
-                    const content = await this.app.vault.read(file);
-                    this.crdtEngine.applyChanges(file.path, content);
+                    if (file.path.startsWith('.cada-letra')) return;
+                    // Esperar un momento para que Obsidian termine de escribir el archivo
+                    setTimeout(async () => {
+                        const content = await this.app.vault.read(file);
+                        this.crdtEngine.applyChanges(file.path, content);
+                    }, 300);
                 }
             })
         );
+
         this.registerEvent(
             this.app.vault.on('delete', (file) => {
-                // Notificar corte topológico
+                if (file.path.startsWith('.cada-letra')) return;
                 this.crdtEngine.deleteFile(file.path);
             })
         );
+
         this.registerEvent(
             this.app.vault.on('rename', async (file, oldPath) => {
-                // Renombrar = Matar al ID anterior y engendrar el nuevo con su texto exacto
                 if(file instanceof TFile && file.extension === 'md') {
+                    if (file.path.startsWith('.cada-letra')) return;
                     this.crdtEngine.deleteFile(oldPath);
                     const content = await this.app.vault.read(file);
                     this.crdtEngine.applyChanges(file.path, content);
@@ -204,7 +215,9 @@ export default class EveryLetterPlugin extends Plugin {
             })
         );
 
-        // 4. Comandos Auxiliares
+        // ================================================================
+        // 4. COMANDOS AUXILIARES
+        // ================================================================
         this.addCommand({
             id: 'everyletter-force-sync',
             name: 'Pulsar latido manual a la red',
@@ -228,7 +241,6 @@ export default class EveryLetterPlugin extends Plugin {
         console.log('🌙 Cada Letra: Nodo desconectado.');
     }
 
-    // Helper centralizado para estética Lava/Neón Ambar
     updateSyncStatus(text: string, bgColor: string, textColor: string) {
         this.statusBarItem.setText(` ${text} `);
         this.statusBarItem.style.backgroundColor = bgColor;
