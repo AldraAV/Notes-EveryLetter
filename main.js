@@ -28576,14 +28576,38 @@ var obsidianFetch = async (url, config) => {
   var _a;
   const urlString = url instanceof URL ? url.toString() : url;
   const method = (config == null ? void 0 : config.method) || "GET";
-  const headers = Object.assign({}, config == null ? void 0 : config.headers);
+  let headers = {};
+  if (config == null ? void 0 : config.headers) {
+    if (config.headers instanceof Headers) {
+      config.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+    } else if (Array.isArray(config.headers)) {
+      config.headers.forEach(([key, value]) => {
+        headers[key] = value;
+      });
+    } else {
+      headers = config.headers;
+    }
+  }
+  let body = void 0;
+  if ((config == null ? void 0 : config.body) !== void 0 && (config == null ? void 0 : config.body) !== null) {
+    if (typeof config.body === "string") {
+      body = config.body;
+    } else if (config.body instanceof ArrayBuffer) {
+      body = config.body;
+    } else if (config.body instanceof Uint8Array) {
+      body = config.body.buffer;
+    } else {
+      body = String(config.body);
+    }
+  }
   const requestParams = {
     url: urlString,
     method,
-    body: config == null ? void 0 : config.body,
+    body,
     headers,
     throw: false
-    // No destruir todo por un 404 o 409
   };
   let response = void 0;
   try {
@@ -28694,14 +28718,18 @@ var CadaLetraSupabaseProvider = class {
   // --- OPERACIONES MAESTRAS DE NÚCLEO (BÓVEDA ENTERA) ---
   async pushVault(vaultKey, stateArray) {
     console.log(`\u2601\uFE0F Intentando cristalizar toda la b\xF3veda [${vaultKey}] en Supabase DB...`);
-    const base64Data = Buffer.from(stateArray).toString("base64");
+    let binary = "";
+    for (let i = 0; i < stateArray.byteLength; i++) {
+      binary += String.fromCharCode(stateArray[i]);
+    }
+    const base64Data = btoa(binary);
     const { error } = await this.supabase.from("everyletter_vaults").upsert({
       vault_id: vaultKey,
       state_vector: base64Data,
       owner: this.deviceName
     }, { onConflict: "vault_id" });
     if (error) {
-      console.error("\u{1F9E8} Fallo card\xEDaco al subir b\xF3veda:", error);
+      console.error("\u{1F9E8} Fallo card\xEDaco al subir b\xF3veda:", JSON.stringify(error));
       throw error;
     }
     console.log(`\u2705 B\xF3veda [${vaultKey}] cristalizada exitosamente.`);
@@ -28710,11 +28738,15 @@ var CadaLetraSupabaseProvider = class {
     console.log(`\u2601\uFE0F Localizando N\xFAcleo Maestro [${vaultKey}] en el espacio sideral...`);
     const { data, error } = await this.supabase.from("everyletter_vaults").select("state_vector").eq("vault_id", vaultKey).single();
     if (error || !data) {
-      console.error("\u{1F9E8} B\xF3veda no encontrada o base de datos no configurada.");
+      console.error("\u{1F9E8} B\xF3veda no encontrada:", JSON.stringify(error));
       return null;
     }
-    const restoredBuffer = Buffer.from(data.state_vector, "base64");
-    return new Uint8Array(restoredBuffer);
+    const binary = atob(data.state_vector);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
   }
   async obliterateVault(vaultKey) {
     console.log(`\u{1F480} Destruyendo el N\xFAcleo Maestro [${vaultKey}] del servidor profundo...`);

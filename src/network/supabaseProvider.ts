@@ -20,14 +20,44 @@ const obsidianFetch = async (
     const urlString = url instanceof URL ? url.toString() : (url as string);
     const method = config?.method || 'GET';
 
-    const headers = Object.assign({}, config?.headers) as Record<string, string>;
+    // Supabase SDK puede mandar un objeto Headers nativo o un Record plano.
+    // requestUrl solo acepta Record<string, string>, así que normalizamos.
+    let headers: Record<string, string> = {};
+    if (config?.headers) {
+        if (config.headers instanceof Headers) {
+            config.headers.forEach((value, key) => {
+                headers[key] = value;
+            });
+        } else if (Array.isArray(config.headers)) {
+            config.headers.forEach(([key, value]) => {
+                headers[key] = value;
+            });
+        } else {
+            headers = config.headers as Record<string, string>;
+        }
+    }
+
+    // El body de Supabase viene como string JSON normalmente
+    let body: string | ArrayBuffer | undefined = undefined;
+    if (config?.body !== undefined && config?.body !== null) {
+        if (typeof config.body === 'string') {
+            body = config.body;
+        } else if (config.body instanceof ArrayBuffer) {
+            body = config.body;
+        } else if (config.body instanceof Uint8Array) {
+            body = config.body.buffer as ArrayBuffer;
+        } else {
+            // Fallback: convertir a string
+            body = String(config.body);
+        }
+    }
 
     const requestParams: RequestUrlParam = {
         url: urlString,
         method: method,
-        body: config?.body as string | ArrayBuffer,
+        body: body,
         headers: headers,
-        throw: false, // No destruir todo por un 404 o 409
+        throw: false,
     };
 
     let response: RequestUrlResponse | undefined = undefined;
@@ -173,8 +203,12 @@ export class CadaLetraSupabaseProvider {
 
     public async pushVault(vaultKey: string, stateArray: Uint8Array): Promise<void> {
         console.log(`☁️ Intentando cristalizar toda la bóveda [${vaultKey}] en Supabase DB...`);
-        // Yjs produce arreglos inmensos. Convertimos a base64 para que Supabase no sufra.
-        const base64Data = Buffer.from(stateArray).toString('base64');
+        // Convertimos a base64 de forma portable (sin Buffer de Node.js que no existe en Mobile)
+        let binary = '';
+        for (let i = 0; i < stateArray.byteLength; i++) {
+            binary += String.fromCharCode(stateArray[i]);
+        }
+        const base64Data = btoa(binary);
         
         const { error } = await this.supabase
             .from('everyletter_vaults')
@@ -185,7 +219,7 @@ export class CadaLetraSupabaseProvider {
             }, { onConflict: 'vault_id' });
 
         if (error) {
-            console.error("🧨 Fallo cardíaco al subir bóveda:", error);
+            console.error("🧨 Fallo cardíaco al subir bóveda:", JSON.stringify(error));
             throw error;
         }
         console.log(`✅ Bóveda [${vaultKey}] cristalizada exitosamente.`);
@@ -200,12 +234,17 @@ export class CadaLetraSupabaseProvider {
             .single();
 
         if (error || !data) {
-            console.error("🧨 Bóveda no encontrada o base de datos no configurada.");
+            console.error("🧨 Bóveda no encontrada:", JSON.stringify(error));
             return null;
         }
         
-        const restoredBuffer = Buffer.from(data.state_vector, 'base64');
-        return new Uint8Array(restoredBuffer);
+        // Decodificamos de vuelta de base64 de forma portable
+        const binary = atob(data.state_vector);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
     }
 
     public async obliterateVault(vaultKey: string): Promise<void> {
