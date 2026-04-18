@@ -29,25 +29,48 @@ export class CRDTEngine {
             }
         });
         
-        // observeDeep vigila si tú o la red editan algún párrafo en CUALQUIER archivo del Mapa
+        // observeDeep vigila TODA mutación remota:
+        // Caso 1: Archivos nuevos/borrados (YMapEvent → event.keys tiene las rutas)
+        // Caso 2: Texto editado dentro de un archivo existente (YTextEvent → event.path tiene la ruta)
         this.vaultMap.observeDeep((events, transaction) => {
-            if (transaction.origin !== 'local') {
-                events.forEach(event => {
-                    // Descubrimos qué archivo exacto acaba de mutar la red
-                    // event.path puede decirnos subramas. Si no hay path, iteramos las keys modificadas.
+            if (transaction.origin === 'local') return; // Ignorar nuestros propios cambios
+
+            const processedPaths = new Set<string>();
+
+            events.forEach(event => {
+                // CASO 1: Cambios estructurales en el Map (crear/borrar archivos)
+                if (event.target === this.vaultMap) {
                     const changedKeys = Array.from(event.keys.keys());
                     changedKeys.forEach(path => {
+                        if (processedPaths.has(path)) return;
+                        processedPaths.add(path);
+
                         const fileText = this.vaultMap.get(path as string);
                         if (fileText && this.onRemoteUpdate) {
-                            console.log(`⚡ Extracción Matemática Completa en [${path}]. Avisando a Quirófano.`);
+                            console.log(`⚡ [Nuevo Archivo Remoto] '${path}' detectado.`);
                             this.onRemoteUpdate(path as string, fileText.toString(), transaction.origin as string);
                         } else if (!fileText && this.onRemoteDelete) {
-                            console.log(`💀 Extracción de Muerte en [${path}]. Avisando a Cementerio.`);
+                            console.log(`💀 [Borrado Remoto] '${path}' eliminado de la malla.`);
                             this.onRemoteDelete(path as string, transaction.origin as string);
                         }
                     });
-                });
-            }
+                }
+
+                // CASO 2: Cambios de CONTENIDO en un Y.Text existente (¡EDICIONES EN VIVO!)
+                // event.path contiene la ruta relativa dentro del Y.Map.
+                // Para Y.Text dentro del Map, event.path[0] es la key (ruta del archivo).
+                if (event.path && event.path.length > 0) {
+                    const filePath = event.path[0] as string;
+                    if (processedPaths.has(filePath)) return;
+                    processedPaths.add(filePath);
+
+                    const fileText = this.vaultMap.get(filePath);
+                    if (fileText && this.onRemoteUpdate) {
+                        console.log(`⚡ [Edición En Vivo] '${filePath}' mutó remotamente. Inyectando...`);
+                        this.onRemoteUpdate(filePath, fileText.toString(), transaction.origin as string);
+                    }
+                }
+            });
         });
     }
 

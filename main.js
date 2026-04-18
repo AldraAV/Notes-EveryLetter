@@ -28772,21 +28772,35 @@ var CRDTEngine = class {
       }
     });
     this.vaultMap.observeDeep((events, transaction) => {
-      if (transaction.origin !== "local") {
-        events.forEach((event) => {
+      if (transaction.origin === "local") return;
+      const processedPaths = /* @__PURE__ */ new Set();
+      events.forEach((event) => {
+        if (event.target === this.vaultMap) {
           const changedKeys = Array.from(event.keys.keys());
           changedKeys.forEach((path) => {
+            if (processedPaths.has(path)) return;
+            processedPaths.add(path);
             const fileText = this.vaultMap.get(path);
             if (fileText && this.onRemoteUpdate) {
-              console.log(`\u26A1 Extracci\xF3n Matem\xE1tica Completa en [${path}]. Avisando a Quir\xF3fano.`);
+              console.log(`\u26A1 [Nuevo Archivo Remoto] '${path}' detectado.`);
               this.onRemoteUpdate(path, fileText.toString(), transaction.origin);
             } else if (!fileText && this.onRemoteDelete) {
-              console.log(`\u{1F480} Extracci\xF3n de Muerte en [${path}]. Avisando a Cementerio.`);
+              console.log(`\u{1F480} [Borrado Remoto] '${path}' eliminado de la malla.`);
               this.onRemoteDelete(path, transaction.origin);
             }
           });
-        });
-      }
+        }
+        if (event.path && event.path.length > 0) {
+          const filePath = event.path[0];
+          if (processedPaths.has(filePath)) return;
+          processedPaths.add(filePath);
+          const fileText = this.vaultMap.get(filePath);
+          if (fileText && this.onRemoteUpdate) {
+            console.log(`\u26A1 [Edici\xF3n En Vivo] '${filePath}' mut\xF3 remotamente. Inyectando...`);
+            this.onRemoteUpdate(filePath, fileText.toString(), transaction.origin);
+          }
+        }
+      });
     });
   }
   /**
@@ -29042,6 +29056,10 @@ var EveryLetterPlugin = class extends import_obsidian3.Plugin {
     await this.loadSettings();
     console.log(`\u2600\uFE0F Despertando el Noveno Hermano: Cada Letra (Nodo: ${this.settings.deviceName || "Misterio"})`);
     this.addSettingTab(new CentroMandoTab(this.app, this));
+    this.addRibbonIcon("cherry", "Cada Letra \u2014 Centro de Mando", () => {
+      this.app.setting.open();
+      this.app.setting.openTabById(this.manifest.id);
+    });
     this.crdtEngine = new CRDTEngine();
     this.crdtEngine.activateNexo(this.settings.vaultKey, this.settings.deviceName);
     this.crdtEngine.onRemoteUpdate = async (path, fusedText, originNode) => {

@@ -40,6 +40,13 @@ export default class EveryLetterPlugin extends Plugin {
         // Dashboard Premium
         this.addSettingTab(new CentroMandoTab(this.app, this));
 
+        // Ícono en el Ribbon (Sidebar izquierdo)
+        this.addRibbonIcon('cherry', 'Cada Letra — Centro de Mando', () => {
+            // Abrir directamente la pestaña de Settings del plugin
+            (this.app as any).setting.open();
+            (this.app as any).setting.openTabById(this.manifest.id);
+        });
+
         // Motor CRDT
         this.crdtEngine = new CRDTEngine();
         this.crdtEngine.activateNexo(this.settings.vaultKey, this.settings.deviceName);
