@@ -28604,9 +28604,14 @@ var CadaLetraSupabaseProvider = class {
     this.deviceName = deviceName;
     // Callback para que la Malla visual del oráculo reaccione en pantalla 
     this.onNodesUpdated = null;
-    this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-      global: { fetch: obsidianFetchNative }
-    });
+    const clientConfig = {};
+    if (import_obsidian.Platform.isMobile) {
+      console.log("\u{1F4F1} Plataforma M\xF3vil detectada: Activando Bypass CORS.");
+      clientConfig.global = { fetch: obsidianFetchNative };
+    } else {
+      console.log("\u{1F4BB} Plataforma PC detectada: Usando arteria directa de Electron.");
+    }
+    this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, clientConfig);
     console.log(`\u{1F525} Enlace Supabase preparado. B\xF3veda Candado [${vaultKey}]`);
     const channelId = `everyletter-sync-${vaultKey}`;
     this.channel = this.supabase.channel(channelId, {

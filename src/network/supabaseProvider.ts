@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Y from 'yjs';
-import { requestUrl, RequestUrlParam } from 'obsidian';
+import { requestUrl, RequestUrlParam, Platform } from 'obsidian';
 import { SUPABASE_URL, SUPABASE_KEY } from '../env';
 
 // BYPASS MÓVIL CAPACITOR (Operación Frankenstein)
@@ -40,10 +40,17 @@ export class CadaLetraSupabaseProvider {
     public onNodesUpdated: ((nodesList: string[]) => void) | null = null;
 
     constructor(private yDoc: Y.Doc, public vaultKey: string, public deviceName: string) {
-        // Inyección del injerto Frankenstein Native-Fetch
-        this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-            global: { fetch: obsidianFetchNative as any }
-        });
+        // Inyección del injerto Frankenstein Native-Fetch SÓLO PARA CELULARES
+        // Desktop Electron ya tiene red libre en Fetch y el proxy artificial lo satura y lo colapsa.
+        const clientConfig: Record<string, any> = {};
+        if (Platform.isMobile) {
+            console.log("📱 Plataforma Móvil detectada: Activando Bypass CORS.");
+            clientConfig.global = { fetch: obsidianFetchNative as any };
+        } else {
+            console.log("💻 Plataforma PC detectada: Usando arteria directa de Electron.");
+        }
+        
+        this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, clientConfig);
         
         console.log(`🔥 Enlace Supabase preparado. Bóveda Candado [${vaultKey}]`);
 
