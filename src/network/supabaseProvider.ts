@@ -1,6 +1,36 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as Y from 'yjs';
+import { requestUrl, RequestUrlParam } from 'obsidian';
 import { SUPABASE_URL, SUPABASE_KEY } from '../env';
+
+// BYPASS MÓVIL CAPACITOR (Operación Frankenstein)
+// Extirpamos el fetch() de JS estándar que genera C.O.R.S. en el celular
+// y lo suplantamos con la aguja nativa de Obsidian
+const obsidianFetchNative = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+    try {
+        const reqOpts: RequestUrlParam = {
+            url: url.toString(),
+            method: options?.method || 'GET',
+            headers: options?.headers as Record<string, string>,
+            body: options?.body as string | ArrayBuffer,
+            throw: false // No destruir todo por un 404
+        };
+        const res = await requestUrl(reqOpts);
+        
+        return {
+            ok: res.status >= 200 && res.status < 300,
+            status: res.status,
+            statusText: '',
+            url: url.toString(),
+            json: async () => res.json,
+            text: async () => res.text,
+            blob: async () => new Blob([res.arrayBuffer]),
+            headers: new Headers(res.headers as unknown as Record<string, string>)
+        } as unknown as Response;
+    } catch (err: any) {
+        throw err;
+    }
+};
 
 export class CadaLetraSupabaseProvider {
     private supabase: SupabaseClient;
@@ -10,7 +40,10 @@ export class CadaLetraSupabaseProvider {
     public onNodesUpdated: ((nodesList: string[]) => void) | null = null;
 
     constructor(private yDoc: Y.Doc, public vaultKey: string, public deviceName: string) {
-        this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+        // Inyección del injerto Frankenstein Native-Fetch
+        this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+            global: { fetch: obsidianFetchNative as any }
+        });
         
         console.log(`🔥 Enlace Supabase preparado. Bóveda Candado [${vaultKey}]`);
 

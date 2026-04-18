@@ -29,7 +29,7 @@ __export(main_exports, {
   default: () => EveryLetterPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // node_modules/.pnpm/lib0@0.2.117/node_modules/lib0/map.js
 var create = () => /* @__PURE__ */ new Map();
@@ -28564,11 +28564,39 @@ function shouldShowDeprecationWarning() {
 }
 if (shouldShowDeprecationWarning()) console.warn("\u26A0\uFE0F  Node.js 18 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 20 or later. For more information, visit: https://github.com/orgs/supabase/discussions/37217");
 
+// src/network/supabaseProvider.ts
+var import_obsidian = require("obsidian");
+
 // src/env.ts
 var SUPABASE_URL = "https://kxgopjwyvoursvyscxtf.supabase.co";
 var SUPABASE_KEY = "sb_publishable_d2edNcYBBc6kMZkP1Lr2kA_Q5EAgUL6";
 
 // src/network/supabaseProvider.ts
+var obsidianFetchNative = async (url, options) => {
+  try {
+    const reqOpts = {
+      url: url.toString(),
+      method: (options == null ? void 0 : options.method) || "GET",
+      headers: options == null ? void 0 : options.headers,
+      body: options == null ? void 0 : options.body,
+      throw: false
+      // No destruir todo por un 404
+    };
+    const res = await (0, import_obsidian.requestUrl)(reqOpts);
+    return {
+      ok: res.status >= 200 && res.status < 300,
+      status: res.status,
+      statusText: "",
+      url: url.toString(),
+      json: async () => res.json,
+      text: async () => res.text,
+      blob: async () => new Blob([res.arrayBuffer]),
+      headers: new Headers(res.headers)
+    };
+  } catch (err) {
+    throw err;
+  }
+};
 var CadaLetraSupabaseProvider = class {
   constructor(yDoc, vaultKey, deviceName) {
     this.yDoc = yDoc;
@@ -28576,7 +28604,9 @@ var CadaLetraSupabaseProvider = class {
     this.deviceName = deviceName;
     // Callback para que la Malla visual del oráculo reaccione en pantalla 
     this.onNodesUpdated = null;
-    this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+      global: { fetch: obsidianFetchNative }
+    });
     console.log(`\u{1F525} Enlace Supabase preparado. B\xF3veda Candado [${vaultKey}]`);
     const channelId = `everyletter-sync-${vaultKey}`;
     this.channel = this.supabase.channel(channelId, {
@@ -28772,8 +28802,8 @@ var CRDTEngine = class {
 };
 
 // src/ui/CentroMando.ts
-var import_obsidian = require("obsidian");
-var CentroMandoTab = class extends import_obsidian.PluginSettingTab {
+var import_obsidian2 = require("obsidian");
+var CentroMandoTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -28816,12 +28846,12 @@ var CentroMandoTab = class extends import_obsidian.PluginSettingTab {
     quote.style.opacity = "0.7";
     quote.style.marginBottom = "35px";
     containerEl.createEl("h3", { text: "I. Identidad del Nodo (B\xE1sico)", attr: { style: "font-weight: 600" } });
-    new import_obsidian.Setting(containerEl).setName("Nombre del Dispositivo").setDesc("Designa un nombre para reconocerte en la malla (Ej. Laptop Personal).").addText((text2) => text2.setPlaceholder("Ej. Obsidian-Main").setValue(this.plugin.settings.deviceName).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Nombre del Dispositivo").setDesc("Designa un nombre para reconocerte en la malla (Ej. Laptop Personal).").addText((text2) => text2.setPlaceholder("Ej. Obsidian-Main").setValue(this.plugin.settings.deviceName).onChange(async (value) => {
       this.plugin.settings.deviceName = value;
       await this.plugin.saveSettings();
       this.plugin.crdtEngine.activateNexo(this.plugin.settings.vaultKey, this.plugin.settings.deviceName);
     }));
-    new import_obsidian.Setting(containerEl).setName("Contrase\xF1a de B\xF3veda (Vault Key)").setDesc("El servidor de Supabase usar\xE1 esta llave como n\xFAcleo interconector.").addText((text2) => text2.setPlaceholder("Ej. Lupe-1706v...").setValue(this.plugin.settings.vaultKey).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Contrase\xF1a de B\xF3veda (Vault Key)").setDesc("El servidor de Supabase usar\xE1 esta llave como n\xFAcleo interconector.").addText((text2) => text2.setPlaceholder("Ej. Lupe-1706v...").setValue(this.plugin.settings.vaultKey).onChange(async (value) => {
       this.plugin.settings.vaultKey = value;
       await this.plugin.saveSettings();
       this.plugin.crdtEngine.activateNexo(this.plugin.settings.vaultKey, this.plugin.settings.deviceName);
@@ -28832,7 +28862,7 @@ var CentroMandoTab = class extends import_obsidian.PluginSettingTab {
     methodSection.style.borderTop = "1px dashed #333";
     methodSection.style.borderBottom = "1px dashed #333";
     methodSection.createEl("h3", { text: "II. Frecuencia de Latido", attr: { style: "margin-top:0; color: #FFB703; font-weight: 600" } });
-    new import_obsidian.Setting(methodSection).setName("Modo de Transfusi\xF3n de Red").setDesc("Decide c\xF3mo recibe y env\xEDa letras CADA LETRA frente a la Nube Central.").addDropdown((drop) => drop.addOption("Live_Deltas", "Transfusi\xF3n en Vivo (Instant CRDT Deltas)").addOption("Manual_Batch", "Cruce Parlamentario (Pull/Push Requests)").setValue(this.plugin.settings.syncMode).onChange(async (value) => {
+    new import_obsidian2.Setting(methodSection).setName("Modo de Transfusi\xF3n de Red").setDesc("Decide c\xF3mo recibe y env\xEDa letras CADA LETRA frente a la Nube Central.").addDropdown((drop) => drop.addOption("Live_Deltas", "Transfusi\xF3n en Vivo (Instant CRDT Deltas)").addOption("Manual_Batch", "Cruce Parlamentario (Pull/Push Requests)").setValue(this.plugin.settings.syncMode).onChange(async (value) => {
       this.plugin.settings.syncMode = value;
       await this.plugin.saveSettings();
     }));
@@ -28843,7 +28873,7 @@ var CentroMandoTab = class extends import_obsidian.PluginSettingTab {
     opsWrapper.style.borderRadius = "15px";
     opsWrapper.style.border = "1px solid rgba(255, 183, 3, 0.1)";
     opsWrapper.createEl("h3", { text: "III. Creadores y Herejes (Nube DB)", attr: { style: "margin-top:0; color: #FFB703" } });
-    const massPush = new import_obsidian.Setting(opsWrapper).setName("Forjar un Nuevo N\xFAcleo Divino (Push B\xF3veda)").setDesc("Subir\xEDas TODO tu disco directo a Supabase. T\xFA te coronas el Maestro y tu Vault_Key dictar\xE1 la ley.");
+    const massPush = new import_obsidian2.Setting(opsWrapper).setName("Forjar un Nuevo N\xFAcleo Divino (Push B\xF3veda)").setDesc("Subir\xEDas TODO tu disco directo a Supabase. T\xFA te coronas el Maestro y tu Vault_Key dictar\xE1 la ley.");
     massPush.addButton((btn) => btn.setButtonText("Upload Total (Crear Nube)").onClick(async () => {
       const originalText = btn.buttonEl.innerText;
       btn.setButtonText("Empujando al vac\xEDo...");
@@ -28863,7 +28893,7 @@ var CentroMandoTab = class extends import_obsidian.PluginSettingTab {
     massPush.controlEl.querySelector("button").style.backgroundColor = "rgba(252, 63, 29, 0.2)";
     massPush.controlEl.querySelector("button").style.color = "#FC3F1D";
     massPush.controlEl.querySelector("button").style.borderColor = "#FC3F1D";
-    const massPull = new import_obsidian.Setting(opsWrapper).setName("Unirse a una B\xF3veda (Descargar Historia)").setDesc("\xBFHas llegado de fuera? Vac\xEDa el StateVector \xEDntegro de Supabase a tu computadora y materializa los archivos f\xEDsicos.");
+    const massPull = new import_obsidian2.Setting(opsWrapper).setName("Unirse a una B\xF3veda (Descargar Historia)").setDesc("\xBFHas llegado de fuera? Vac\xEDa el StateVector \xEDntegro de Supabase a tu computadora y materializa los archivos f\xEDsicos.");
     massPull.addButton((btn) => btn.setButtonText("Descargar Vena C\xF3smica").onClick(async () => {
       const originalText = btn.buttonEl.innerText;
       btn.setButtonText("Descargando Vector...");
@@ -28889,8 +28919,8 @@ var CentroMandoTab = class extends import_obsidian.PluginSettingTab {
       adminWrapper.style.boxShadow = "0px 0px 15px rgba(252, 63, 29, 0.1)";
       adminWrapper.createEl("h2", { text: "\u{1F3DB}\uFE0F El Parlamento Restringido", attr: { style: "margin-top:0; color: #FC3F1D; text-transform: uppercase; font-weight: 800; letter-spacing: 1px" } });
       adminWrapper.createEl("p", { text: "Solo t\xFA como Or\xE1culo de esta Nube puedes ver e impartir justicia aqu\xED.", attr: { style: "color:#CCC; font-size:0.9em; margin-bottom: 25px" } });
-      new import_obsidian.Setting(adminWrapper).setName("Bandeja de Pull Requests").setDesc("Sat\xE9lites (Invitados) no pueden sobreescribir tus versos vitales. Ellos dejan Lotes Pendientes aqu\xED.").addButton((btn) => btn.setButtonText("Revisar (0) Pendientes").setDisabled(true));
-      new import_obsidian.Setting(adminWrapper).setName("Malla de Sangre").setDesc("Dispositivos conectados ahora y escuchando bajo esta clave. T\xFA tienes la suprema potestad de sus letras.").addButton((btn) => btn.setButtonText("Manejar Restricciones P2P (En Desarrollo)").setDisabled(true));
+      new import_obsidian2.Setting(adminWrapper).setName("Bandeja de Pull Requests").setDesc("Sat\xE9lites (Invitados) no pueden sobreescribir tus versos vitales. Ellos dejan Lotes Pendientes aqu\xED.").addButton((btn) => btn.setButtonText("Revisar (0) Pendientes").setDisabled(true));
+      new import_obsidian2.Setting(adminWrapper).setName("Malla de Sangre").setDesc("Dispositivos conectados ahora y escuchando bajo esta clave. T\xFA tienes la suprema potestad de sus letras.").addButton((btn) => btn.setButtonText("Manejar Restricciones P2P (En Desarrollo)").setDisabled(true));
       const mayaContainer = adminWrapper.createDiv();
       mayaContainer.style.background = "#0a0000";
       mayaContainer.style.border = "1px solid #330000";
@@ -28914,8 +28944,8 @@ var CentroMandoTab = class extends import_obsidian.PluginSettingTab {
           });
         };
       }
-      new import_obsidian.Setting(adminWrapper).setName("Sala del Cementerio").setDesc('Los archivos que otros celulares "destruyan", caer\xE1n f\xEDsicamente a la carpeta ignota (.cada-letra-cementerio) hasta que t\xFA votes su eliminaci\xF3n final.').addButton((btn) => btn.setButtonText("Purgar / Restaurar Muertos").setDisabled(true));
-      const destroySet = new import_obsidian.Setting(adminWrapper).setName("Apagar el Sol (Destruir Nube P\xFAblica)").setDesc("Borrar\xE1 todo rastro de tu b\xF3veda en Supabase. El historial flotante desaparecer\xE1 para siempre de internet. Nadie podr\xE1 descargar tus notas.").addButton((btn) => btn.setButtonText("OBLITERAR N\xDACLEO NUBE").onClick(async () => {
+      new import_obsidian2.Setting(adminWrapper).setName("Sala del Cementerio").setDesc('Los archivos que otros celulares "destruyan", caer\xE1n f\xEDsicamente a la carpeta ignota (.cada-letra-cementerio) hasta que t\xFA votes su eliminaci\xF3n final.').addButton((btn) => btn.setButtonText("Purgar / Restaurar Muertos").setDisabled(true));
+      const destroySet = new import_obsidian2.Setting(adminWrapper).setName("Apagar el Sol (Destruir Nube P\xFAblica)").setDesc("Borrar\xE1 todo rastro de tu b\xF3veda en Supabase. El historial flotante desaparecer\xE1 para siempre de internet. Nadie podr\xE1 descargar tus notas.").addButton((btn) => btn.setButtonText("OBLITERAR N\xDACLEO NUBE").onClick(async () => {
         btn.setButtonText("Vaciando el cielo...");
         try {
           await this.plugin.crdtEngine.obliterateVaultMassive(this.plugin.settings.vaultKey);
@@ -28943,10 +28973,12 @@ var DEFAULT_SETTINGS = {
   // Tú empiezas asumiendo ser Dios local hasta pactar
   syncMode: "Live_Deltas"
 };
-var EveryLetterPlugin = class extends import_obsidian2.Plugin {
+var EveryLetterPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
     this.syncTimeout = null;
+    // Anclaje de sedantes para evitar lecturas vírgenes
+    this.modifyDebouncers = {};
   }
   async onload() {
     await this.loadSettings();
@@ -28955,7 +28987,7 @@ var EveryLetterPlugin = class extends import_obsidian2.Plugin {
     this.crdtEngine = new CRDTEngine();
     this.crdtEngine.activateNexo(this.settings.vaultKey, this.settings.deviceName);
     this.crdtEngine.onRemoteUpdate = async (path, fusedText, originNode) => {
-      const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
+      const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
       if (view && view.file && view.file.path === path) {
         const currentCursor = view.editor.getCursor();
         view.editor.setValue(fusedText);
@@ -28964,13 +28996,22 @@ var EveryLetterPlugin = class extends import_obsidian2.Plugin {
         setTimeout(() => this.updateSyncStatus("\u2600 / \u{1F352} Iguanas ranas", "#FFB703", "#1A0400"), 3e3);
       } else {
         const exactFile = this.app.vault.getAbstractFileByPath(path);
-        if (exactFile instanceof import_obsidian2.TFile) {
+        if (exactFile instanceof import_obsidian3.TFile) {
           await this.app.vault.modify(exactFile, fusedText);
           console.log(`[Materializador]: El nodo [${originNode}] alter\xF3 '${path}' en segundo plano.`);
         } else if (!exactFile) {
           try {
             const folders = path.split("/");
             if (folders.length > 1) {
+              let currentFolder = "";
+              for (let i = 0; i < folders.length - 1; i++) {
+                currentFolder += (currentFolder === "" ? "" : "/") + folders[i];
+                const folderExists = this.app.vault.getAbstractFileByPath(currentFolder);
+                if (!folderExists) {
+                  console.log(`[Arquitecto]: Forjando rama perdida '${currentFolder}'.`);
+                  await this.app.vault.createFolder(currentFolder);
+                }
+              }
             }
             await this.app.vault.create(path, fusedText);
             console.log(`[Materializador]: Naci\xF3 el nuevo archivo '${path}'.`);
@@ -28982,7 +29023,7 @@ var EveryLetterPlugin = class extends import_obsidian2.Plugin {
     };
     this.crdtEngine.onRemoteDelete = async (path, originNode) => {
       const exactFile = this.app.vault.getAbstractFileByPath(path);
-      if (exactFile instanceof import_obsidian2.TFile) {
+      if (exactFile instanceof import_obsidian3.TFile) {
         if (this.settings.userRole === "Dios") {
           const cementerioPath = ".cada-letra-cementerio";
           const cementerioFolder = this.app.vault.getAbstractFileByPath(cementerioPath);
@@ -29029,8 +29070,23 @@ var EveryLetterPlugin = class extends import_obsidian2.Plugin {
       })
     );
     this.registerEvent(
+      this.app.vault.on("modify", (file) => {
+        if (file instanceof import_obsidian3.TFile && file.extension === "md") {
+          if (file.path.startsWith(".cada-letra")) return;
+          if (this.modifyDebouncers[file.path]) {
+            clearTimeout(this.modifyDebouncers[file.path]);
+          }
+          this.modifyDebouncers[file.path] = setTimeout(() => {
+            this.app.vault.read(file).then((content) => {
+              this.crdtEngine.applyChanges(file.path, content);
+            });
+          }, 400);
+        }
+      })
+    );
+    this.registerEvent(
       this.app.vault.on("create", async (file) => {
-        if (file instanceof import_obsidian2.TFile && file.extension === "md") {
+        if (file instanceof import_obsidian3.TFile && file.extension === "md") {
           const content = await this.app.vault.read(file);
           this.crdtEngine.applyChanges(file.path, content);
         }
@@ -29043,7 +29099,7 @@ var EveryLetterPlugin = class extends import_obsidian2.Plugin {
     );
     this.registerEvent(
       this.app.vault.on("rename", async (file, oldPath) => {
-        if (file instanceof import_obsidian2.TFile && file.extension === "md") {
+        if (file instanceof import_obsidian3.TFile && file.extension === "md") {
           this.crdtEngine.deleteFile(oldPath);
           const content = await this.app.vault.read(file);
           this.crdtEngine.applyChanges(file.path, content);
@@ -29054,7 +29110,7 @@ var EveryLetterPlugin = class extends import_obsidian2.Plugin {
       id: "everyletter-force-sync",
       name: "Pulsar latido manual a la red",
       callback: () => {
-        new import_obsidian2.Notice("\u{1F352} EveryLetter: Latido forzado disparado a Supabase.");
+        new import_obsidian3.Notice("\u{1F352} EveryLetter: Latido forzado disparado a Supabase.");
         this.updateSyncStatus("\u{1F4E1} Conectando...", "#FF8C42", "#1A0400");
         setTimeout(() => this.updateSyncStatus("\u2600 / \u{1F352} Iguanas ranas", "#FFB703", "#1A0400"), 2500);
       }

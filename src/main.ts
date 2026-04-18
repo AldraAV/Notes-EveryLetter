@@ -24,6 +24,8 @@ export default class EveryLetterPlugin extends Plugin {
     private statusBarItem: HTMLElement;
     private syncTimeout: NodeJS.Timeout | null = null;
     private crdtEngine: CRDTEngine;
+    // Anclaje de sedantes para evitar lecturas vírgenes
+    private modifyDebouncers: Record<string, ReturnType<typeof setTimeout>> = {};
 
     async onload() {
         // Absorber la configuración local (Las credenciales si ya estaban)
@@ -64,8 +66,15 @@ export default class EveryLetterPlugin extends Plugin {
                     try {
                         const folders = path.split('/');
                         if (folders.length > 1) {
-                            // En Obsidian debes asegurar que las carpetas existen. 
-                            // Omitiremos creación de carpetas por ahora asumiendo rutas root o simples.
+                            let currentFolder = '';
+                            for (let i = 0; i < folders.length - 1; i++) {
+                                currentFolder += (currentFolder === '' ? '' : '/') + folders[i];
+                                const folderExists = this.app.vault.getAbstractFileByPath(currentFolder);
+                                if (!folderExists) {
+                                    console.log(`[Arquitecto]: Forjando rama perdida '${currentFolder}'.`);
+                                    await this.app.vault.createFolder(currentFolder);
+                                }
+                            }
                         }
                         await this.app.vault.create(path, fusedText);
                         console.log(`[Materializador]: Nació el nuevo archivo '${path}'.`);
@@ -150,6 +159,25 @@ export default class EveryLetterPlugin extends Plugin {
         );
 
         // 3. FASE MASIVA: El Ojo de Sauron (Escuchar la Bóveda Entera, no sólo los dedos)
+        this.registerEvent(
+            this.app.vault.on('modify', (file) => {
+                if (file instanceof TFile && file.extension === 'md') {
+                    if (file.path.startsWith('.cada-letra')) return;
+                    
+                    // Sedante a la hiperactividad de Obsidian (Debounce)
+                    if (this.modifyDebouncers[file.path]) {
+                        clearTimeout(this.modifyDebouncers[file.path]);
+                    }
+                    
+                    // Esperamos 400ms tras el último espasmo del archivo para que decante el contenido
+                    this.modifyDebouncers[file.path] = setTimeout(() => {
+                        this.app.vault.read(file).then(content => {
+                            this.crdtEngine.applyChanges(file.path, content);
+                        });
+                    }, 400);
+                }
+            })
+        );
         this.registerEvent(
             this.app.vault.on('create', async (file) => {
                 // Cuando nace una nueva nota, vacía o llena, avisamos al Y.Map
