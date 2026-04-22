@@ -28811,12 +28811,12 @@ var CRDTEngine = class {
     const dbId = `cada-letra-db-${vaultKey}`;
     const localProvider = new IndexeddbPersistence(dbId, this.yDoc);
     localProvider.on("synced", () => {
-      console.log(`\u{1F4E6} B\xFAnker \xC1mbar [${dbId}] validado. Historial a salvo.`);
+      console.log(`\u{1F4E6} B\xFAnker \xC1mbar [${dbId}] validado. Historial a salvo. Conectando a la red...`);
+      if (this.supabaseProvider) {
+        this.supabaseProvider.disconnect();
+      }
+      this.supabaseProvider = new CadaLetraSupabaseProvider(this.yDoc, vaultKey, deviceName);
     });
-    if (this.supabaseProvider) {
-      this.supabaseProvider.disconnect();
-    }
-    this.supabaseProvider = new CadaLetraSupabaseProvider(this.yDoc, vaultKey, deviceName);
   }
   /**
    * Sincroniza el bloque tecleado. Ahora exige saber LA RUTA.
@@ -28960,6 +28960,158 @@ var CentroMandoTab = class extends import_obsidian2.PluginSettingTab {
       }
       btn.setDisabled(false);
       setTimeout(() => btn.setButtonText(original), 4e3);
+    }));
+    new import_obsidian2.Setting(containerEl).setName("\u{1F3FA} Arqueolog\xEDa de Emergencia").setHeading();
+    containerEl.createEl("p", {
+      text: "Si perdiste contenido en una migraci\xF3n o sincronizaci\xF3n fallida, estas herramientas intentan recuperarlo del estado interno del CRDT y del IndexedDB local.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian2.Setting(containerEl).setName("Volcar estado CRDT a archivo").setDesc("Escribe el contenido de TODAS las notas que el motor Yjs conoce en ARQUEOLOGIA_DUMP.md. \xDAtil para ver qu\xE9 tiene/no tiene el CRDT en memoria.").addButton((btn) => btn.setButtonText("\u{1F3FA} Volcar CRDT").onClick(async () => {
+      btn.setButtonText("Volcando...");
+      btn.setDisabled(true);
+      try {
+        const vaultMap = this.plugin.crdtEngine.vaultMap;
+        let dump = `# \u{1F3FA} Arqueolog\xEDa \u2014 Dump del CRDT
+`;
+        dump += `> Generado: ${(/* @__PURE__ */ new Date()).toISOString()}
+`;
+        dump += `> Total de archivos en Y.Doc: ${vaultMap.size}
+
+---
+
+`;
+        vaultMap.forEach((yText, path) => {
+          const content = yText.toString();
+          dump += `## \u{1F4C4} ${path}
+`;
+          dump += `> **Tama\xF1o:** ${content.length} caracteres
+
+`;
+          if (content.length > 0) {
+            dump += content + "\n\n";
+          } else {
+            dump += `> \u26A0\uFE0F VAC\xCDO \u2014 El CRDT no tiene contenido para este archivo.
+
+`;
+          }
+          dump += `---
+
+`;
+        });
+        const dumpPath = "ARQUEOLOGIA_DUMP.md";
+        const existingFile = this.app.vault.getAbstractFileByPath(dumpPath);
+        if (existingFile) {
+          await this.app.vault.modify(existingFile, dump);
+        } else {
+          await this.app.vault.create(dumpPath, dump);
+        }
+        new import_obsidian2.Notice(`\u{1F3FA} Dump completado. ${vaultMap.size} archivos en CRDT. Ver ARQUEOLOGIA_DUMP.md`);
+        btn.setButtonText("\u2705 Volcado");
+      } catch (e) {
+        new import_obsidian2.Notice("\u{1F9E8} Error al volcar. Revisa la consola.");
+        btn.setButtonText("Error");
+      }
+      btn.setDisabled(false);
+      setTimeout(() => btn.setButtonText("\u{1F3FA} Volcar CRDT"), 4e3);
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Restaurar notas vac\xEDas desde CRDT").setDesc("Para cada archivo en disco que pese 0 bytes pero exista en el CRDT con contenido, lo restaura. No toca archivos que ya tienen contenido.").addButton((btn) => btn.setButtonText("\u{1F52C} Restaurar").setCta().onClick(async () => {
+      btn.setButtonText("Analizando...");
+      btn.setDisabled(true);
+      let restored = 0;
+      let skipped = 0;
+      let noContent = 0;
+      try {
+        const vaultMap = this.plugin.crdtEngine.vaultMap;
+        for (const [path, yText] of vaultMap) {
+          const crdtContent = yText.toString();
+          if (crdtContent.length === 0) {
+            noContent++;
+            continue;
+          }
+          const file = this.app.vault.getAbstractFileByPath(path);
+          if (file) {
+            const diskContent = await this.app.vault.read(file);
+            if (diskContent.length === 0) {
+              await this.app.vault.modify(file, crdtContent);
+              console.log(`[Arque\xF3logo]: Restaurado '${path}' (${crdtContent.length} chars)`);
+              restored++;
+            } else {
+              skipped++;
+            }
+          }
+        }
+        new import_obsidian2.Notice(`\u{1F352} Restauraci\xF3n: ${restored} recuperados, ${skipped} ya ten\xEDan contenido, ${noContent} vac\xEDos en CRDT.`);
+        btn.setButtonText(`\u2705 ${restored} restaurados`);
+      } catch (e) {
+        new import_obsidian2.Notice("\u{1F9E8} Error en restauraci\xF3n. Revisa consola.");
+        btn.setButtonText("Error");
+      }
+      btn.setDisabled(false);
+      setTimeout(() => btn.setButtonText("\u{1F52C} Restaurar"), 5e3);
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Listar bases de datos IndexedDB").setDesc("Lista TODAS las bases IndexedDB. Si la versi\xF3n anterior del plugin us\xF3 una clave distinta, encontrar\xE1s aqu\xED la base original con tu contenido intacto.").addButton((btn) => btn.setButtonText("\u{1F5C4}\uFE0F Escanear IndexedDB").onClick(async () => {
+      btn.setButtonText("Escaneando...");
+      btn.setDisabled(true);
+      try {
+        if (!("databases" in indexedDB)) {
+          new import_obsidian2.Notice("\u26A0\uFE0F No soportado. Abre DevTools (Ctrl+Shift+I) \u2192 Application \u2192 IndexedDB.");
+          console.log("[Arque\xF3logo]: Busca manualmente cada-letra-db-* en DevTools de Obsidian.");
+          btn.setButtonText("No soportado");
+          btn.setDisabled(false);
+          return;
+        }
+        const databases = await indexedDB.databases();
+        const cadaLetraDbs = databases.filter(
+          (db) => db.name && (db.name.includes("cada-letra") || db.name.includes("everyletter") || db.name.includes("y-indexeddb"))
+        );
+        console.log("\u{1F3FA} [Arque\xF3logo] TODAS las IndexedDB:", databases.map((d) => d.name));
+        console.log("\u{1F3FA} [Arque\xF3logo] Bases de Cada Letra:", cadaLetraDbs);
+        let content = `# \u{1F5C4}\uFE0F Escaneo de IndexedDB
+> ${(/* @__PURE__ */ new Date()).toISOString()}
+
+`;
+        content += `## Todas las bases encontradas (${databases.length})
+
+`;
+        databases.forEach((db) => {
+          content += `- \`${db.name}\` (v${db.version})
+`;
+        });
+        content += `
+## Bases relacionadas con Cada Letra (${cadaLetraDbs.length})
+
+`;
+        if (cadaLetraDbs.length > 0) {
+          cadaLetraDbs.forEach((db) => {
+            content += `- \u{1F352} \`${db.name}\` (v${db.version})
+`;
+          });
+          content += `
+> Si ves una base distinta a \`cada-letra-db-${this.plugin.settings.vaultKey}\`, esa puede ser la base original de la v1.
+`;
+        } else {
+          content += `> No se encontraron bases con prefijo conocido.
+`;
+        }
+        content += `
+**Clave actual:** \`cada-letra-db-${this.plugin.settings.vaultKey}\`
+`;
+        const dumpPath = "INDEXEDDB_SCAN.md";
+        const existingFile = this.app.vault.getAbstractFileByPath(dumpPath);
+        if (existingFile) {
+          await this.app.vault.modify(existingFile, content);
+        } else {
+          await this.app.vault.create(dumpPath, content);
+        }
+        new import_obsidian2.Notice(`\u{1F5C4}\uFE0F ${cadaLetraDbs.length} bases de Cada Letra. Ver INDEXEDDB_SCAN.md`);
+        btn.setButtonText("\u2705 Escaneado");
+      } catch (e) {
+        console.error("[Arque\xF3logo] Error:", e);
+        new import_obsidian2.Notice("\u{1F9E8} Error. Revisa la consola (Ctrl+Shift+I)");
+        btn.setButtonText("Error");
+      }
+      btn.setDisabled(false);
+      setTimeout(() => btn.setButtonText("\u{1F5C4}\uFE0F Escanear IndexedDB"), 4e3);
     }));
     if (this.plugin.settings.userRole === "Dios") {
       new import_obsidian2.Setting(containerEl).setName("Parlamento del Or\xE1culo").setHeading();

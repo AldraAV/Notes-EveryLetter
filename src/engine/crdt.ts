@@ -80,20 +80,30 @@ export class CRDTEngine {
     activateNexo(vaultKey: string, deviceName: string) {
         if(!vaultKey) return;
         
-        // Anclamos la memoria Yjs a la base de datos IndexedDB local Aislando por clave de bóveda
-        // Si tienes 3 bóvedas de prueba en tu laptop, no cruzarán estados mutantes entre ellas
+        // Anclamos la memoria Yjs a la base de datos IndexedDB local aislando por clave de bóveda
         const dbId = `cada-letra-db-${vaultKey}`;
         const localProvider = new IndexeddbPersistence(dbId, this.yDoc);
-        localProvider.on('synced', () => {
-            console.log(`📦 Búnker Ámbar [${dbId}] validado. Historial a salvo.`);
-        });
 
-        if(this.supabaseProvider) {
-            // Destruir el puente viejo a la matrix antes de crear uno nuevo
-            this.supabaseProvider.disconnect();
-        }
-        this.supabaseProvider = new CadaLetraSupabaseProvider(this.yDoc, vaultKey, deviceName);
+        // ══════════════════════════════════════════════════════════
+        // FIX CRÍTICO DE RACE CONDITION:
+        // y-indexeddb carga el estado ASÍNCRONAMENTE. Si conectamos
+        // a Supabase ANTES de que termine, los deltas remotos llegan
+        // a un Y.Doc vacío y "ganan" la fusión CRDT, vaciando las
+        // notas locales que aún no se habían cargado del IndexedDB.
+        //
+        // Solución: Bloquear Supabase hasta que 'synced' dispare.
+        // ══════════════════════════════════════════════════════════
+        localProvider.on('synced', () => {
+            console.log(`📦 Búnker Ámbar [${dbId}] validado. Historial a salvo. Conectando a la red...`);
+            
+            // Solo AHORA, con el estado local cargado, conectamos al puente remoto
+            if(this.supabaseProvider) {
+                this.supabaseProvider.disconnect();
+            }
+            this.supabaseProvider = new CadaLetraSupabaseProvider(this.yDoc, vaultKey, deviceName);
+        });
     }
+
 
     /**
      * Sincroniza el bloque tecleado. Ahora exige saber LA RUTA.

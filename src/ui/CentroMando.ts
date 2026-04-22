@@ -146,6 +146,150 @@ export class CentroMandoTab extends PluginSettingTab {
                     setTimeout(() => btn.setButtonText(original), 4000);
                 }));
 
+        // ── V. ARQUEOLOGÍA DE EMERGENCIA ────────────────────────
+        new Setting(containerEl).setName('🏺 Arqueología de Emergencia').setHeading();
+        containerEl.createEl('p', {
+            text: 'Si perdiste contenido en una migración o sincronización fallida, estas herramientas intentan recuperarlo del estado interno del CRDT y del IndexedDB local.',
+            cls: 'setting-item-description'
+        });
+
+        new Setting(containerEl)
+            .setName('Volcar estado CRDT a archivo')
+            .setDesc('Escribe el contenido de TODAS las notas que el motor Yjs conoce en ARQUEOLOGIA_DUMP.md. Útil para ver qué tiene/no tiene el CRDT en memoria.')
+            .addButton(btn => btn
+                .setButtonText('🏺 Volcar CRDT')
+                .onClick(async () => {
+                    btn.setButtonText('Volcando...');
+                    btn.setDisabled(true);
+                    try {
+                        const vaultMap = this.plugin.crdtEngine.vaultMap;
+                        let dump = `# 🏺 Arqueología — Dump del CRDT\n`;
+                        dump += `> Generado: ${new Date().toISOString()}\n`;
+                        dump += `> Total de archivos en Y.Doc: ${vaultMap.size}\n\n---\n\n`;
+
+                        vaultMap.forEach((yText, path) => {
+                            const content = yText.toString();
+                            dump += `## 📄 ${path}\n`;
+                            dump += `> **Tamaño:** ${content.length} caracteres\n\n`;
+                            if (content.length > 0) {
+                                dump += content + '\n\n';
+                            } else {
+                                dump += `> ⚠️ VACÍO — El CRDT no tiene contenido para este archivo.\n\n`;
+                            }
+                            dump += `---\n\n`;
+                        });
+
+                        const dumpPath = 'ARQUEOLOGIA_DUMP.md';
+                        const existingFile = this.app.vault.getAbstractFileByPath(dumpPath);
+                        if (existingFile) {
+                            await this.app.vault.modify(existingFile as any, dump);
+                        } else {
+                            await this.app.vault.create(dumpPath, dump);
+                        }
+                        new Notice(`🏺 Dump completado. ${vaultMap.size} archivos en CRDT. Ver ARQUEOLOGIA_DUMP.md`);
+                        btn.setButtonText('✅ Volcado');
+                    } catch(e) {
+                        new Notice('🧨 Error al volcar. Revisa la consola.');
+                        btn.setButtonText('Error');
+                    }
+                    btn.setDisabled(false);
+                    setTimeout(() => btn.setButtonText('🏺 Volcar CRDT'), 4000);
+                }));
+
+        new Setting(containerEl)
+            .setName('Restaurar notas vacías desde CRDT')
+            .setDesc('Para cada archivo en disco que pese 0 bytes pero exista en el CRDT con contenido, lo restaura. No toca archivos que ya tienen contenido.')
+            .addButton(btn => btn
+                .setButtonText('🔬 Restaurar')
+                .setCta()
+                .onClick(async () => {
+                    btn.setButtonText('Analizando...');
+                    btn.setDisabled(true);
+                    let restored = 0;
+                    let skipped = 0;
+                    let noContent = 0;
+                    try {
+                        const vaultMap = this.plugin.crdtEngine.vaultMap;
+                        for (const [path, yText] of vaultMap) {
+                            const crdtContent = yText.toString();
+                            if (crdtContent.length === 0) { noContent++; continue; }
+
+                            const file = this.app.vault.getAbstractFileByPath(path);
+                            if (file) {
+                                const diskContent = await this.app.vault.read(file as any);
+                                if (diskContent.length === 0) {
+                                    await this.app.vault.modify(file as any, crdtContent);
+                                    console.log(`[Arqueólogo]: Restaurado '${path}' (${crdtContent.length} chars)`);
+                                    restored++;
+                                } else {
+                                    skipped++;
+                                }
+                            }
+                        }
+                        new Notice(`🍒 Restauración: ${restored} recuperados, ${skipped} ya tenían contenido, ${noContent} vacíos en CRDT.`);
+                        btn.setButtonText(`✅ ${restored} restaurados`);
+                    } catch(e) {
+                        new Notice('🧨 Error en restauración. Revisa consola.');
+                        btn.setButtonText('Error');
+                    }
+                    btn.setDisabled(false);
+                    setTimeout(() => btn.setButtonText('🔬 Restaurar'), 5000);
+                }));
+
+        new Setting(containerEl)
+            .setName('Listar bases de datos IndexedDB')
+            .setDesc('Lista TODAS las bases IndexedDB. Si la versión anterior del plugin usó una clave distinta, encontrarás aquí la base original con tu contenido intacto.')
+            .addButton(btn => btn
+                .setButtonText('🗄️ Escanear IndexedDB')
+                .onClick(async () => {
+                    btn.setButtonText('Escaneando...');
+                    btn.setDisabled(true);
+                    try {
+                        if (!('databases' in indexedDB)) {
+                            new Notice('⚠️ No soportado. Abre DevTools (Ctrl+Shift+I) → Application → IndexedDB.');
+                            console.log('[Arqueólogo]: Busca manualmente cada-letra-db-* en DevTools de Obsidian.');
+                            btn.setButtonText('No soportado');
+                            btn.setDisabled(false);
+                            return;
+                        }
+                        const databases = await (indexedDB as any).databases();
+                        const cadaLetraDbs = databases.filter((db: any) =>
+                            db.name && (db.name.includes('cada-letra') || db.name.includes('everyletter') || db.name.includes('y-indexeddb'))
+                        );
+
+                        console.log('🏺 [Arqueólogo] TODAS las IndexedDB:', databases.map((d: any) => d.name));
+                        console.log('🏺 [Arqueólogo] Bases de Cada Letra:', cadaLetraDbs);
+
+                        let content = `# 🗄️ Escaneo de IndexedDB\n> ${new Date().toISOString()}\n\n`;
+                        content += `## Todas las bases encontradas (${databases.length})\n\n`;
+                        databases.forEach((db: any) => { content += `- \`${db.name}\` (v${db.version})\n`; });
+                        content += `\n## Bases relacionadas con Cada Letra (${cadaLetraDbs.length})\n\n`;
+                        if (cadaLetraDbs.length > 0) {
+                            cadaLetraDbs.forEach((db: any) => { content += `- 🍒 \`${db.name}\` (v${db.version})\n`; });
+                            content += `\n> Si ves una base distinta a \`cada-letra-db-${this.plugin.settings.vaultKey}\`, esa puede ser la base original de la v1.\n`;
+                        } else {
+                            content += `> No se encontraron bases con prefijo conocido.\n`;
+                        }
+                        content += `\n**Clave actual:** \`cada-letra-db-${this.plugin.settings.vaultKey}\`\n`;
+
+                        const dumpPath = 'INDEXEDDB_SCAN.md';
+                        const existingFile = this.app.vault.getAbstractFileByPath(dumpPath);
+                        if (existingFile) {
+                            await this.app.vault.modify(existingFile as any, content);
+                        } else {
+                            await this.app.vault.create(dumpPath, content);
+                        }
+                        new Notice(`🗄️ ${cadaLetraDbs.length} bases de Cada Letra. Ver INDEXEDDB_SCAN.md`);
+                        btn.setButtonText('✅ Escaneado');
+                    } catch(e) {
+                        console.error('[Arqueólogo] Error:', e);
+                        new Notice('🧨 Error. Revisa la consola (Ctrl+Shift+I)');
+                        btn.setButtonText('Error');
+                    }
+                    btn.setDisabled(false);
+                    setTimeout(() => btn.setButtonText('🗄️ Escanear IndexedDB'), 4000);
+                }));
+
         // ── IV. PARLAMENTO (Solo para Oráculo) ──────────────────
         if (this.plugin.settings.userRole === 'Dios') {
             new Setting(containerEl).setName('Parlamento del Oráculo').setHeading();
@@ -155,7 +299,6 @@ export class CentroMandoTab extends PluginSettingTab {
                 cls: 'setting-item-description'
             });
 
-            // Malla de nodos conectados
             new Setting(containerEl)
                 .setName('Malla de dispositivos')
                 .setDesc('Nodos conectados en tiempo real bajo tu clave.');
@@ -184,7 +327,6 @@ export class CentroMandoTab extends PluginSettingTab {
                 };
             }
 
-            // Cementerio
             new Setting(containerEl)
                 .setName('Cementerio')
                 .setDesc('Archivos borrados remotamente se guardan en .cada-letra-cementerio en vez de destruirse.')
@@ -192,7 +334,6 @@ export class CentroMandoTab extends PluginSettingTab {
                     new Notice('🍒 Busca la carpeta .cada-letra-cementerio en tu explorador de archivos.');
                 }));
 
-            // Obliterar
             new Setting(containerEl)
                 .setName('Destruir bóveda de la nube')
                 .setDesc('Elimina permanentemente todos los datos de tu clave en Supabase. Irreversible.')
