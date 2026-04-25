@@ -116,22 +116,23 @@ export class CRDTEngine {
      * Sincroniza el bloque tecleado. Ahora exige saber LA RUTA.
      */
     applyChanges(path: string, content: string) {
-        let fileText;
-        if (!this.vaultMap.has(path)) {
-            // Inicializar el espacio del archivo en el multiverso CRDT si es nuevo
-            fileText = new Y.Text();
-            this.vaultMap.set(path, fileText);
-        } else {
-            fileText = this.vaultMap.get(path)!;
-        }
+        // Envolver TODO en la transacción 'local' para que el observer no se confunda
+        // y lo trate como un archivo remoto (lo cual provocaba que disparara un borrado).
+        this.yDoc.transact(() => {
+            let fileText;
+            if (!this.vaultMap.has(path)) {
+                // Inicializar el espacio del archivo en el multiverso CRDT si es nuevo
+                fileText = new Y.Text();
+                this.vaultMap.set(path, fileText);
+            } else {
+                fileText = this.vaultMap.get(path)!;
+            }
 
-        if (fileText.toString() !== content) {
-            // Etiquetamos 'local' para proteger loop de ecos
-            this.yDoc.transact(() => {
+            if (fileText.toString() !== content) {
                 fileText.delete(0, fileText.length);
                 fileText.insert(0, content);
-            }, "local");
-        }
+            }
+        }, "local");
     }
 
     /**
